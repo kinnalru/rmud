@@ -1,0 +1,92 @@
+#!/bin/env ruby
+
+require 'optparse'
+require 'securerandom'
+require 'daemons'
+require 'rmud'
+
+UTIL = File.basename(__FILE__)
+
+@opts = {
+  id: 'main',
+  client: 'tintin',
+  daemon: false
+}
+
+
+parser = OptionParser.new do |o|
+  o.banner = "Usage: #{UTIL} [options] -- <daemon options>"
+
+  o.separator ""
+  o.separator "Bot options:"
+
+  o.on("--id=#{@opts[:id]}", 'set id') do |id|
+    @opts[:id] = id.strip
+  end
+
+  o.on('--tintin', 'generate tintin integrtion commands') do
+    @opts[:client] = 'tintin'
+  end
+  
+  o.on('--daemon', 'daemon') do
+    @opts[:daemon] = true
+  end
+end
+parser.parse!
+
+
+puts 
+conn = RMud::Connection.new(id: @opts[:id])
+
+if @opts[:daemon]
+  puts :d1
+  Daemons.run_proc("rmud_#{conn.id}", backtrace: true, log_output: true) do |d|
+    puts :d2
+    bot = RMud::Bot.new(conn).tap do |bot|
+      puts :d3
+      Signal.trap 'TERM' do
+        puts "TERM"
+        Thread.new{bot.stop}
+      end
+
+      puts :d4
+      Signal.trap 'INT' do
+        puts "INT"
+        Thread.new{bot.stop}
+      end
+    end
+    puts :d5
+    bot.start
+    puts :d6
+    bot.wait
+    puts :d7
+
+  ensure 
+    puts :d8
+    bot.stop
+  end
+end
+
+if @opts[:client] == 'tintin'
+
+  File.write("/tmp/rmud_#{conn.id}.tin", "
+#action {%1} {#script { echo '%1' >> #{conn.infile} 2> /dev/null; cat #{conn.outfile} 2>/dev/null}}
+#ticker bot {#script { cat #{conn.outfile} 2>/dev/null }} {1}
+")
+
+
+
+end
+
+exit 0
+
+fork do
+  Process.daemon
+  bot = RMud::Bot.new(conn)
+  bot.start
+  sleep 40
+  bot.stop()
+end
+
+exit 0
+
