@@ -4,89 +4,138 @@ require 'optparse'
 require 'securerandom'
 require 'daemons'
 require 'rmud'
+require 'fcntl'
 
 UTIL = File.basename(__FILE__)
 
+STDOUT.sync = true rescue nil
+STDERR.sync = true rescue nil
+
 @opts = {
-  id: 'main',
-  client: 'tintin',
-  daemon: false
+  id:     'main',
+  client: 'mudler',
+  dir:    '.rmud'
 }
 
 
 parser = OptionParser.new do |o|
-  o.banner = "Usage: #{UTIL} [options] -- <daemon options>"
+  o.banner = "Usage: #{UTIL} [options] start|stop|restart|run|status "
 
-  o.separator ""
-  o.separator "Bot options:"
+  o.separator ''
+  o.separator 'Bot options:'
 
   o.on("--id=#{@opts[:id]}", 'set id') do |id|
     @opts[:id] = id.strip
   end
 
+  o.on('--attach=OUT', 'set id') do |attach|
+    @opts[:attach] = attach.strip
+  end
+
   o.on('--tintin', 'generate tintin integrtion commands') do
     @opts[:client] = 'tintin'
   end
-  
-  o.on('--daemon', 'daemon') do
-    @opts[:daemon] = true
+
+  o.on('--mudler', 'run as mudler bot') do
+    @opts[:client] = 'mudler'
   end
 end
-parser.parse!
+@args = parser.parse!
 
+@opts[:dir] = File.expand_path(@opts[:dir])
+FileUtils.mkdir_p(@opts[:dir]) unless File.exist?(@opts[:dir])
 
-puts 
-conn = RMud::Connection.new(id: @opts[:id])
+if out = @opts[:attach]
+  exec 'tail', '-f', "#{@opts[:dir]}/#{out}.out"
+end
 
-if @opts[:daemon]
-  puts :d1
-  Daemons.run_proc("rmud_#{conn.id}", backtrace: true, log_output: true) do |d|
-    puts :d2
-    bot = RMud::Bot.new(conn).tap do |bot|
-      puts :d3
-      Signal.trap 'TERM' do
-        puts "TERM"
-        Thread.new{bot.stop}
-      end
+Dir.chdir(@opts[:dir])
 
-      puts :d4
-      Signal.trap 'INT' do
-        puts "INT"
-        Thread.new{bot.stop}
-      end
+conn = nil
+bot = nil
+
+if @opts[:client] == 'mudler'
+  $real_stdin_close = STDIN.method(:close)
+  $real_stdin_reopen = STDIN.method(:reopen)
+
+  $stdin.instance_eval do
+    define_singleton_method(:close) do |*_args|
+      nil
     end
-    puts :d5
-    bot.start
-    puts :d6
-    bot.wait
-    puts :d7
 
-  ensure 
-    puts :d8
-    bot.stop
+    define_singleton_method(:reopen) do |*_args|
+      nil
+    end
   end
+end
+
+Daemons.run_proc(@opts[:id], dir: @opts[:dir], dir_mode: :normal, log_output: true, ARGV: @args) do
+  Dir.chdir(@opts[:dir])
+
+  STDOUT.sync = true rescue nil
+  STDERR.sync = true rescue nil
+
+  if @opts[:client] == 'tintin'
+    conn = RMud::FifoConnection.new(dir: @opts[:dir], id: @opts[:id])
+    bot = RMud::Bot.new(conn, api_class: RMud::Api::TinTin)
+  elsif @opts[:client] == 'mudler'
+    $stdin.instance_eval do
+      define_singleton_method(:close, &$real_stdin_close)
+      define_singleton_method(:reopen, &$real_stdin_reopen)
+    end
+
+    out_fd = STDOUT.fcntl(Fcntl::F_DUPFD)
+    out = IO.new(out_fd, mode: 'w')
+    out.sync = true
+
+    $stdout.reopen("#{@opts[:dir]}/#{@opts[:id]}.output")
+    $stderr.close rescue nil
+    STDOUT = $stderr = STDERR = $stdout
+
+    conn = RMud::StdConnection.new(instream: STDIN, outstream: out)
+    bot = RMud::Bot.new(conn, api_class: RMud::Api::Mudler)
+  end
+
+  Signal.trap 'TERM' do
+    Thread.new do
+      puts 'Terminating gracefully...'
+      bot&.stop rescue nil
+    end
+  end
+
+  Signal.trap 'INT' do
+    Thread.new do
+      puts 'Stopping gracefully...'
+      bot&.stop rescue nil
+    end
+  end
+
+  bot.start(block: true)
+ensure
+  if bot && !bot.stopped?
+    puts 'EXITING....'
+    bot.stop rescue nil
+  end
+  conn.stop if conn && !conn.stopped?
 end
 
 if @opts[:client] == 'tintin'
+  script = "#{@opts[:dir]}/#{@opts[:id]}.tin"
+  File.write(script, "
+  #showme Initializing rmud bot connection at #{@opts[:dir]}..
+  #split
+  #action {%1} {#script { echo \"%1\" >> #{conn.infile} 2> /dev/null; cat #{conn.outfile} 2>/dev/null};}
+  #ticker bot {#script { cat #{conn.outfile} 2>/dev/null };} {1}
+  #script {rmud} {#{__FILE__} --id #{opts[:id]} status}
+  #delay 0.1 #showme rmud bot $rmud[1]
+  #session main mud.c7i.ru 9000
+  #function {rmud}
+  {
+    #showme {rmud %0};
+    #return 0;
+  };
+  ".lstrip)
 
-  File.write("/tmp/rmud_#{conn.id}.tin", "
-#action {%1} {#script { echo '%1' >> #{conn.infile} 2> /dev/null; cat #{conn.outfile} 2>/dev/null}}
-#ticker bot {#script { cat #{conn.outfile} 2>/dev/null }} {1}
-")
-
-
-
+  exec 'tt++', '-r', script.to_s
 end
-
-exit 0
-
-fork do
-  Process.daemon
-  bot = RMud::Bot.new(conn)
-  bot.start
-  sleep 40
-  bot.stop()
-end
-
-exit 0
 

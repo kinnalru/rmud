@@ -19,5 +19,8 @@ Gem::Specification.new do |spec|
 
   spec.add_runtime_dependency 'activesupport', '~> 6.0'
   spec.add_runtime_dependency 'daemons'
+  spec.add_runtime_dependency 'colorize'
+
+  spec.add_development_dependency 'byebug'
 end
 

@@ -3,6 +3,7 @@ PATH
   specs:
     rmud (0.0.1)
       activesupport (~> 6.0)
+      colorize
       daemons
 
 GEM
@@ -14,6 +15,8 @@ GEM
       minitest (~> 5.1)
       tzinfo (~> 1.1)
       zeitwerk (~> 2.2, >= 2.2.2)
+    byebug (11.1.3)
+    colorize (0.8.1)
     concurrent-ruby (1.1.6)
     daemons (1.3.1)
     i18n (1.8.5)
@@ -28,6 +31,7 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
+  byebug
   rmud!
 
 BUNDLED WITH
