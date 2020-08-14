@@ -13,11 +13,6 @@ module RMud
       @reader = start_reader
     end
 
-    def wait
-      return if termiated?
-      @reader&.join
-    end
-
     def do_stop
       @reader.tap do |reader|
         break unless reader
@@ -28,8 +23,14 @@ module RMud
     end
 
     def do_write line
+      puts "TRANSMIT: #{line.to_s}"
       outstream.puts(line.to_s)
       outstream.flush
+    end
+
+    def wait
+      return if termiated?
+      @reader&.join
     end
 
     def start_reader
@@ -37,10 +38,11 @@ module RMud
         until termiated? || instream.closed?
           begin
             while !termiated? && !instream.eof?
-              line = instream.gets
-              conv = line.encode("UTF-8")
-              File.write('/tmp/rblog', "read line: #{conv.rstrip}\n", mode: 'a+')
-              process(conv.rstrip)
+              line = instream.gets&.encode("UTF-8")&.rstrip
+              next unless line
+
+              File.write('/tmp/rblog', "read line: #{line}\n", mode: 'a+')
+              process(line)
               Thread.pass
             end
             instream.close

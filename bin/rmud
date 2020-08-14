@@ -13,7 +13,7 @@ STDERR.sync = true rescue nil
 
 @opts = {
   id:     'main',
-  client: 'mudler',
+  client: 'mudlet',
   dir:    '.rmud'
 }
 
@@ -36,8 +36,8 @@ parser = OptionParser.new do |o|
     @opts[:client] = 'tintin'
   end
 
-  o.on('--mudler', 'run as mudler bot') do
-    @opts[:client] = 'mudler'
+  o.on('--mudlet', 'run as mudlet bot') do
+    @opts[:client] = 'mudlet'
   end
 end
 @args = parser.parse!
@@ -54,7 +54,7 @@ Dir.chdir(@opts[:dir])
 conn = nil
 bot = nil
 
-if @opts[:client] == 'mudler'
+if @opts[:client] == 'mudlet'
   $real_stdin_close = STDIN.method(:close)
   $real_stdin_reopen = STDIN.method(:reopen)
 
@@ -78,7 +78,7 @@ Daemons.run_proc(@opts[:id], dir: @opts[:dir], dir_mode: :normal, log_output: tr
   if @opts[:client] == 'tintin'
     conn = RMud::FifoConnection.new(dir: @opts[:dir], id: @opts[:id])
     bot = RMud::Bot.new(conn, api_class: RMud::Api::TinTin)
-  elsif @opts[:client] == 'mudler'
+  elsif @opts[:client] == 'mudlet'
     $stdin.instance_eval do
       define_singleton_method(:close, &$real_stdin_close)
       define_singleton_method(:reopen, &$real_stdin_reopen)
@@ -93,7 +93,7 @@ Daemons.run_proc(@opts[:id], dir: @opts[:dir], dir_mode: :normal, log_output: tr
     STDOUT = $stderr = STDERR = $stdout
 
     conn = RMud::StdConnection.new(instream: STDIN, outstream: out)
-    bot = RMud::Bot.new(conn, api_class: RMud::Api::Mudler)
+    bot = RMud::Bot.new(conn, api_class: RMud::Api::Mudlet)
   end
 
   Signal.trap 'TERM' do

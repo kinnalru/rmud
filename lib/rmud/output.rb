@@ -57,7 +57,7 @@ module RMud
 
 
     attr_reader :bot, :name
-    def initialize bot, name: 
+    def initialize bot, name, *args
       @bot = bot
       @name = name
 

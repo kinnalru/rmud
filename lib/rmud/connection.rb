@@ -54,7 +54,7 @@ module RMud
     end
 
     def write(line)
-      mx.synchronize{ do_write(line) }
+      mx.synchronize{ do_write(line) } if line
     end
 
     def do_write(_line)
@@ -64,17 +64,12 @@ module RMud
     def process(line)
       return if line.strip.empty?
 
-      results = handlers.map do |h|
+      handlers.each do |h|
         begin
           [h.call(line)].flatten
         rescue StandardError => e
           warn "Handler exception: #{e}. #{e.backtrace}"
           return []
-        end
-      end
-      mx.synchronize do
-        results.flatten.each do |l|
-          do_write(l)
         end
       end
     end

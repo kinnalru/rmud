@@ -18,13 +18,6 @@ module RMud
       @writer = start_writer
     end
 
-    def wait
-      return if termiated?
-      @reader&.join
-      return if termiated?
-      @writer&.join
-    end
-    
     def do_stop
       @reader.tap do |reader|
         break unless reader
@@ -61,6 +54,13 @@ module RMud
       queue.push line
     end
 
+    def wait
+      return if termiated?
+      @reader&.join
+      return if termiated?
+      @writer&.join
+    end
+
     def clean
       File.remove(infile) rescue nil
       File.unlink(infile) rescue nil
@@ -75,10 +75,9 @@ module RMud
             File.open(fn, 'r') do |read|
               break if termiated?
 
-              while line = read.gets
-                conv = line.encode("UTF-8")
-                File.write('/tmp/rblog', "read line: #{conv.rstrip}\n", mode: 'a+')
-                process(conv.rstrip)
+              while line = read.gets&.encode("UTF-8")&.rstrip
+                File.write('/tmp/rblog', "read line: #{line}\n", mode: 'a+')
+                process(line)
               end
               Thread.pass
             end

@@ -13,6 +13,7 @@ module RMud
         o.process(line)
       end
 
+      @plugins = {}
       @scheduler = Scheduler.new
       @api = api_class.new(bot: self)
 
@@ -20,15 +21,13 @@ module RMud
         puts "process #{line.inspect}"
         File.write("/tmp/full.log", line + "\n", mode: "a")
         process(line)
-
-        "WRITTEN #{line}"
       end
     end
 
     def start(block: false)
       @conn.start
       @scheduler.after(1.second) do
-        api.info("Started")
+        api.init()
       end
 
       @scheduler.every(5.second) do
@@ -51,12 +50,37 @@ module RMud
 
     def process line
       if md = CMD_RX.match(line)
-        args = md[:args].split(/\ ;\|/)
+        cmd = md[:cmd]
+        args = md[:args].split(/[\ ,;\|]/).select(&:present?)
+        puts "COMMAND: [#{cmd}], args: #{args.inspect}"
 
-        puts "COMMAND: [#{md[:cmd]}], args: #{args.inspect}"
+        if cmd == 'plugin'
+          plugin(args.shift, args)
+        end
       end
+    rescue => e
+      api.error(e.inspect)
     end
 
+    def plugin name, params
+      class_name = name.classify
+      if klass = class_name.safe_constantize || "RMud::#{class_name}".safe_constantize
+        if p = @plugins[klass.to_s + params.to_s]
+          raise "Plugin [#{klass.to_s}] already started with #{params.to_s}"
+        else
+          klass.new(self, *params).tap do |p|
+            @plugins[klass.to_s + params.to_s] = p
+            @conn.on_line do |line|
+              p.process(line)
+            end
+          end
+          api.info("Plugin [#{klass.to_s}] started")
+        end
+
+      else
+        raise "Unknown plugin #{name}"
+      end
+    end
 
 
     class Obcast
