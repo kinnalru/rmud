@@ -66,30 +66,59 @@ module RMud
 
       def init
         transmit('')
-        script = "
-if exists('rmud', 'trigger') == 0 then
-  permGroup('rmud', 'trigger');
-end
+        script = %{
+          if exists('rmud', 'trigger') == 0 then
+            permGroup('rmud', 'trigger');
+          end
 
-if exists('rmud_capture', 'trigger') == 0 then
-  permRegexTrigger('rmud_capture', 'rmud', {'(.*)'}, [[rmud.send(matches[1] .. '\\n');]]);
-end
+          if exists('rmud', 'script') == 0 then
+            permGroup('rmud', 'script');
+          end
 
-if exists('rmud', 'alias') == 0 then
-  permGroup('rmud', 'alias');
-end
+          display(11111);
+          if exists('rmud_process', 'script') == 0 then
+            permScript('rmud_process', 'rmud', [[
+              rmud_process = function(arg)
+                rmud.send(arg .. '\\n')
+              end
+            ]]);
+          end
+          display(22222);
 
-if exists('rmud_cmd', 'alias') == 0 then
-  permAlias('rmud_cmd', 'rmud', '^rmud (.*)$', [[rmud.send(matches[1] .. '\\n');]]);
-end
-"
+          if exists('rmud_capture', 'trigger') == 0 then
+            permRegexTrigger('rmud_capture', 'rmud', {'(.*)'}, [[rmud.send(matches[1] .. '\\n');]]);
+          end
+
+          # display(rmud)
+          # rmud.rmud_process = function(arg)
+          #   rmud.send(arg .. '\n')
+          # end
+
+          # if exists('rmud', 'alias') == 0 then
+
+          # end
+
+          # if exists('rmud', 'alias') == 0 then
+          #   permGroup('rmud', 'alias');
+          # end
+
+          # if exists('rmud_cmd', 'alias') == 0 then
+          #   permAlias('rmud_cmd', 'rmud', '^rmud (.*)$', [[rmud.send(matches[1] .. '\\n');]]);
+          # end
+        }
         info("Initializing objects...")
-        transmit "#{script}"
+        send "#{script}"
         info("Initialized")
       end
 
+      def send(msg)
+        puts msg
+        @bot.conn.write msg
+        @bot.conn.write ''
+      end
+
       def echo(msg)
-        transmit "decho(ansi2decho('rmud#{msg}\\n'))"
+        send "decho(ansi2decho(\"#{msg.to_s}\\n\"))"
       end
 
       def info(msg)

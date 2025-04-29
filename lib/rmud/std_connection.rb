@@ -3,10 +3,11 @@ module RMud
 
     attr_reader :instream, :outstream
 
-    def initialize(instream:, outstream:)
-      super()
-      @instream = instream
-      @outstream = outstream
+    def initialize(*args, input:, output:, **kwargs)
+      super(*args, **kwargs)
+
+      @instream = input
+      @outstream = output
     end
 
     def do_start
@@ -23,8 +24,7 @@ module RMud
     end
 
     def do_write line
-      puts "TRANSMIT: #{line.to_s}"
-      outstream.puts(line.to_s)
+      outstream.puts(line.to_s.strip)
       outstream.flush
     end
 

@@ -29,7 +29,7 @@ module RMud
         api.init()
       end
       @scheduler.every(5.second) do
-        # api.info("p".light_white + "i".red + "n".light_black + "g".light_red)
+        api.info("p".light_white + "i".red + "n".light_black + "g".light_red)
       end
       wait if block
     end

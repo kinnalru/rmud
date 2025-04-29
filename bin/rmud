@@ -60,6 +60,18 @@ if @opts[:client] == 'tintin'
   puts "".ljust(80, '*')
 end
 
+if @opts[:client] == 'mudlet'
+  out_fd = STDOUT.fcntl(Fcntl::F_DUPFD)
+  out = IO.new(out_fd, mode: 'w')
+  out.sync = true
+
+  STDOUT.reopen "./#{@opts[:id]}.stdout"
+  STDERR.reopen "./#{@opts[:id]}.stderr"
+
+  conn = RMud::StdConnection.new(id: @opts[:id], input: STDIN, output: out)
+  bot = RMud::Bot.new(conn, api_class: RMud::Api::Mudlet)
+end
+
 
 Signal.trap 'TERM' do
   Thread.new do
