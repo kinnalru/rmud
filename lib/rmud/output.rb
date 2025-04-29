@@ -56,12 +56,11 @@ module RMud
 
 
 
-    attr_reader :bot, :name
-    def initialize bot, name, *args
+    attr_reader :bot
+    def initialize bot, *args, file:
       @bot = bot
-      @name = name
 
-      @file = "/tmp/#{name}.log"
+      @file = file
 
       @m = Matcher.new.tap do |m|
         m.on  /\A# \[OOC\] (?<sender>.*): (?<text>.*)\Z/ do |md|
@@ -86,13 +85,15 @@ module RMud
 
 
     def process line
-      l = @m.match(line)
-      log(l) if l
+      if l = @m.match(line)
+        puts "> #{l}"
+        log(l)
+      end
     end
 
     def log line
-      puts "WRITE: #{line}"
-      puts "WRITE E: #{line.encoding}"
+      # puts "WRITE: #{line}"
+      # puts "WRITE E: #{line.encoding}"
       File.write(@file, line + "\n", mode: "a")
     end
 

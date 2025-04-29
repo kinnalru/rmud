@@ -2,11 +2,11 @@
 
 require 'optparse'
 require 'securerandom'
-require 'daemons'
-require 'rmud'
 require 'fcntl'
+require 'rmud'
 
 UTIL = File.basename(__FILE__)
+SELF = File.absolute_path(__FILE__)
 
 STDOUT.sync = true rescue nil
 STDERR.sync = true rescue nil
@@ -19,7 +19,7 @@ STDERR.sync = true rescue nil
 
 
 parser = OptionParser.new do |o|
-  o.banner = "Usage: #{UTIL} [options] start|stop|restart|run|status "
+  o.banner = "Usage: #{UTIL} [options]"
 
   o.separator ''
   o.separator 'Bot options:'
@@ -28,11 +28,7 @@ parser = OptionParser.new do |o|
     @opts[:id] = id.strip
   end
 
-  o.on('--attach=OUT', 'set id') do |attach|
-    @opts[:attach] = attach.strip
-  end
-
-  o.on('--tintin', 'generate tintin integrtion commands') do
+  o.on('--tintin', 'generate tintin integration commands') do
     @opts[:client] = 'tintin'
   end
 
@@ -43,16 +39,47 @@ end
 @args = parser.parse!
 
 @opts[:dir] = File.expand_path(@opts[:dir])
-FileUtils.mkdir_p(@opts[:dir]) unless File.exist?(@opts[:dir])
+@opts[:pid] = "#{@opts[:dir]}/#{@opts[:id]}.pid"
 
-if out = @opts[:attach]
-  exec 'tail', '-f', "#{@opts[:dir]}/#{out}.out"
-end
+FileUtils.mkdir_p(@opts[:dir]) unless File.exist?(@opts[:dir])
 
 Dir.chdir(@opts[:dir])
 
-conn = nil
-bot = nil
+conn, bot = nil
+
+if @opts[:client] == 'tintin'
+  conn = RMud::FileConnection.new(dir: @opts[:dir], id: @opts[:id])
+  bot = RMud::Bot.new(conn, api_class: RMud::Api::TinTin)
+
+  puts "\nPreparing script for TinTin++ integration..."
+  script = "#{@opts[:dir]}/#{@opts[:id]}.tin"
+  File.write(script, RMud::Api::TinTin.script(infile: conn.infile, outfile: conn.outfile))
+  puts "  You can run TinTin++ using script"
+  puts "".ljust(80, '*')
+  puts '*' + "tt++ -r #{script.to_s}".center(78, ' ') + '*'
+  puts "".ljust(80, '*')
+end
+
+
+Signal.trap 'TERM' do
+  Thread.new do
+    puts 'Terminating gracefully...'
+    bot&.stop rescue nil
+  end
+end
+
+Signal.trap 'INT' do
+  Thread.new do
+    puts 'Stopping gracefully...'
+    bot&.stop rescue nil
+  end
+end
+
+File.write(@opts[:pid], Process.pid)
+bot.start(block: true)
+
+exit 0
+
 
 if @opts[:client] == 'mudlet'
   $real_stdin_close = STDIN.method(:close)
@@ -69,14 +96,19 @@ if @opts[:client] == 'mudlet'
   end
 end
 
-Daemons.run_proc(@opts[:id], dir: @opts[:dir], dir_mode: :normal, log_output: true, ARGV: @args) do
+
+
+puts "DAEMON BOT.."
+r = Daemons.run_proc(@opts[:id], dir: @opts[:dir], dir_mode: :normal, log_output: true, ARGV: @args) do
   Dir.chdir(@opts[:dir])
+  $a = 1
+  puts "DAEMON BOT OK"
 
   STDOUT.sync = true rescue nil
   STDERR.sync = true rescue nil
 
   if @opts[:client] == 'tintin'
-    conn = RMud::FifoConnection.new(dir: @opts[:dir], id: @opts[:id])
+    @conn = conn = RMud::FifoConnection.new(dir: @opts[:dir], id: @opts[:id])
     bot = RMud::Bot.new(conn, api_class: RMud::Api::TinTin)
   elsif @opts[:client] == 'mudlet'
     $stdin.instance_eval do
@@ -112,30 +144,47 @@ Daemons.run_proc(@opts[:id], dir: @opts[:dir], dir_mode: :normal, log_output: tr
 
   bot.start(block: true)
 ensure
+  puts 222
   if bot && !bot.stopped?
     puts 'EXITING....'
     bot.stop rescue nil
   end
   conn.stop if conn && !conn.stopped?
+  exit(0)
 end
 
-if @opts[:client] == 'tintin'
-  script = "#{@opts[:dir]}/#{@opts[:id]}.tin"
-  File.write(script, "
-  #showme Initializing rmud bot connection at #{@opts[:dir]}..
-  #split
-  #action {%1} {#script { echo \"%1\" >> #{conn.infile} 2> /dev/null; cat #{conn.outfile} 2>/dev/null};}
-  #ticker bot {#script { cat #{conn.outfile} 2>/dev/null };} {1}
-  #script {rmud} {#{__FILE__} --id #{opts[:id]} status}
-  #delay 0.1 #showme rmud bot $rmud[1]
-  #session main mud.c7i.ru 9000
-  #function {rmud}
-  {
-    #showme {rmud %0};
-    #return 0;
-  };
-  ".lstrip)
+puts r.inspect
+puts @controller.inspect
+puts r.controller.inspect
 
-  exec 'tt++', '-r', script.to_s
-end
+
+# puts "run tintin.."
+# if @opts[:client] == 'tintin'
+#   script = "#{@opts[:dir]}/#{@opts[:id]}.tin"
+
+#   File.write(script, "
+#   #showme Initializing rmud bot connection at #{@opts[:dir]}...
+#   #split
+#   #action {%1} {#script { flock '#{@conn.infile}' -c \"echo %1 >> '#{@conn.infile}' 2> /dev/null\"}}
+#   #script {rmud} {#{__FILE__} --id #{@opts[:id]} status}
+#   ".lstrip)
+
+#   # File.write(script, "
+#   # #showme Initializing rmud bot connection at #{@opts[:dir]}..
+#   # #split
+#   # #action {%1} {#script { echo \"%1\" >> #{conn.infile} 2> /dev/null; cat #{conn.outfile} 2>/dev/null};}
+#   # #ticker bot {#script { cat #{conn.outfile} 2>/dev/null };} {1}
+#   # #script {rmud} {#{__FILE__} --id #{opts[:id]} status}
+#   # #delay 0.1 #showme rmud bot $rmud[1]
+#   # #session main mud.c7i.ru 9000
+#   # #function {rmud}
+#   # {
+#   #   #showme {rmud %0};
+#   #   #return 0;
+#   # };
+#   # ".lstrip)
+
+#   puts "exec tintin"
+#   exec 'tt++', '-r', script.to_s
+# end
 

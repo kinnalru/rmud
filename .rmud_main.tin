@@ -1,0 +1,4 @@
+
+#split
+#action {%1} {#script { echo '%1' >> /home/jerry/devel/jerry/bt/.rmud/main.cmd 2> /dev/null; cat /home/jerry/devel/jerry/bt/.rmud/main.result 2>/dev/null}}
+#ticker bot {#script { cat /home/jerry/devel/jerry/bt/.rmud/main.result 2>/dev/null }} {1}

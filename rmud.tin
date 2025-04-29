@@ -1,0 +1,5 @@
+#ticker bot {#script { flock /home/jerry/devel/jerry/bt/.rmud/cmds -c "cat /home/jerry/devel/jerry/bt/.rmud/cmds; rm /home/jerry/devel/jerry/bt/.rmud/cmds &> /dev/null" 2>/dev/null }} {0.1}
+#action {%1} {#script { echo '%1' >> /home/jerry/devel/jerry/bt/.rmud/main.cmd 2> /dev/null}}
+
+#ALIAS {rmud %*} { #script {echo %0 >> /home/jerry/devel/jerry/bt/.rmud/main.cmd} }
+

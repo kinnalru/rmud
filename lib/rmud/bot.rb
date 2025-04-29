@@ -8,7 +8,7 @@ module RMud
     def initialize(conn, api_class: RMud::Api::TinTin)
       @conn = conn
 
-      o = Output.new(self, name: 'c7i')
+      o = Output.new(self, file: "#{conn.id}_tells.log")
       @conn.on_line do |line|
         o.process(line)
       end
@@ -18,7 +18,6 @@ module RMud
       @api = api_class.new(bot: self)
 
       @conn.on_line do |line|
-        puts "process #{line.inspect}"
         File.write("/tmp/full.log", line + "\n", mode: "a")
         process(line)
       end
@@ -29,9 +28,8 @@ module RMud
       @scheduler.after(1.second) do
         api.init()
       end
-
       @scheduler.every(5.second) do
-        api.info("p".light_white + "i".red + "n".light_black + "g".light_red)
+        # api.info("p".light_white + "i".red + "n".light_black + "g".light_red)
       end
       wait if block
     end
@@ -56,6 +54,8 @@ module RMud
 
         if cmd == 'plugin'
           plugin(args.shift, args)
+        else cmd == 'status'
+          api.info("rmud is active")
         end
       end
     rescue => e

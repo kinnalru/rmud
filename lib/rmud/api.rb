@@ -2,12 +2,46 @@ module RMud
   module Api
     class TinTin
 
-      def initialize(bot: bot)
+      # Настрока работы с TinTin
+      def self.script(infile:, outfile:)
+        %{
+          #split
+          #ACTION {%*}     {
+            #variable {outline} {%0};
+            #replace  {outline} {\'} {pp_pp};
+            #replace  {outline} {\"} {pp__pp};
+            #replace  {outline} {\`} {pp___pp};
+            #script   {flock '#{infile}' -c \"echo '$outline' >> '#{infile}'\" &> /dev/null };  
+          }
+          #TICKER bot      {#script { flock '#{outfile}' -c \"cat '#{outfile}'; > '#{outfile}'\" }} {0.1}
+          #ALIAS {rmud %*} {
+            #variable {rmud_outline} {%0};
+            #replace  {rmud_outline} {\'} {pp_pp};
+            #replace  {rmud_outline} {\"} {pp__pp};
+            #replace  {rmud_outline} {\`} {pp___pp};
+            #script { flock '#{infile}' -c \"echo '$rmud_outline' >> '#{infile}'\" &> /dev/null}
+          }
+
+          #showme 
+          #showme Initializing RMUD bot connection...
+          #showme    Input  Stream: #{outfile}
+          #showme    Output Stream: #{infile}
+        }.strip
+      end
+
+      def initialize(bot: nil)
         @bot = bot
       end
 
+      def init
+      end
+
+      def send(msg)
+        @bot.conn.write msg
+      end
+
       def echo(msg)
-        @bot.conn.write "#showme {rmud#{msg}}"
+        send "#showme {#{msg}}"
       end
 
       def info(msg)
@@ -21,7 +55,7 @@ module RMud
     end
 
     class Mudlet
-      def initialize(bot: bot)
+      def initialize(bot: nil)
         @bot = bot
       end
 
