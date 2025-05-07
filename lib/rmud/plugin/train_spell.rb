@@ -16,7 +16,6 @@ class TrainSpell < Plugin
 #Ты теперь в совершенстве знаешь cure light!
 
   AFFECTS_SPELL_RX_PATTERN = "\\s*(?<spell>SPELL)\\s+(?<level>\\d+)%,\s+(?<cost>\\d+)"
-  AFFECTS_LINE_RX_PATTERN = "(.*SPELL.*)+"
   # AFFECTS
 
   # EMAIL_RX = URI::MailTo::EMAIL_REGEXP
@@ -34,10 +33,26 @@ class TrainSpell < Plugin
   end
 
   TEXT = '
+
 Level  1: armor              100%,   1 mana   magic missile      100%,   1 mana
           ventriloquate        1%,   1 mana
 Level  2: detect magic         1%,   1 mana
-Level  3: cure light          23%,   1 mana   detect invis         1%,   1 mana
+Level  3: cure light         100%,   1 mana   detect invis         1%,   1 mana
+Level  4: chill touch         недоступно      floating disc       недоступно   
+          shield              недоступно   
+Level  5: faerie fire         недоступно      invisibility        недоступно   
+Level  6: continual light     недоступно   
+Level  7: burning hands       недоступно   
+Level  8: bless               недоступно      create water        недоступно   
+          cure blindness      недоступно      refresh             недоступно   
+          remove splinters    недоступно   
+Level  9: detect poison       недоступно      infravision         недоступно   
+          locate object       недоступно      recharge            недоступно   
+Level 10: create food         недоступно      create rose         недоступно   
+          cure serious        недоступно      fly                 недоступно   
+          shocking grasp      недоступно      sleep               недоступно   
+Level 11: detect alignment    недоступно      giant strength      недоступно   
+          protection evil     недоступно      protection good     недоступно  
 '
 
   def parse_all text
