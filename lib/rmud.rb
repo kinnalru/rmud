@@ -11,3 +11,6 @@ require_relative 'rmud/bot'
 require_relative 'rmud/scheduler'
 require_relative 'rmud/output'
 require_relative 'rmud/api'
+require_relative 'rmud/plugin'
+require_relative 'rmud/plugin/train_spell'
+
