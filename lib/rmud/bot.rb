@@ -1,12 +1,46 @@
 require 'colorize'
 module RMud
+
+  class Log
+    def initialize id
+      @log = File.open("./#{id}.log", "w+")
+      @log.sync = true
+
+      @botlog = File.open("./#{id}.bot.log", "w+")
+      @botlog.sync = true
+    end
+
+    def input string
+      write(@log, string, 'INPUT')
+      string
+    end
+
+    def output string
+      write(@log, string, 'OUTPUT')
+      string
+    end
+
+    def info string
+      write(@log, string, 'INFO')
+      @botlog.puts string
+      string
+    end
+
+    def write io, msg, *tags
+      t = tags.map{|t| "[#{t}]"}.join
+      io.puts("[#{Time.now}]#{t}: #{msg}")
+    end
+
+  end
+
   class Bot
-    attr_reader :conn, :scheduler, :api
+    attr_reader :conn, :log, :scheduler, :api
 
     CMD_RX = /\Armud[\ ]+(?<cmd>[^\ ]+)[\ ]*(?<args>.*)\Z/
 
-    def initialize(conn, api_class: RMud::Api::TinTin)
+    def initialize(conn, api_class: RMud::Api::TinTin, log:)
       @conn = conn
+      @log = log
 
       o = Output.new(self, file: "#{conn.id}_tells.log")
       @conn.on_line do |line|
@@ -24,12 +58,13 @@ module RMud
     end
 
     def start(block: false)
+      log.info("Starting...")
       @conn.start
       @scheduler.after(1.second) do
         api.init()
       end
       @scheduler.every(5.second) do
-        api.info("p".light_white + "i".red + "n".light_black + "g".light_red)
+        # api.info("p".light_white + "i".red + "n".light_black + "g".light_red)
       end
       wait if block
     end
@@ -48,31 +83,44 @@ module RMud
 
     def process line
       if md = CMD_RX.match(line)
-        cmd = md[:cmd]
+        cmd = md[:cmd].strip
         args = md[:args].split(/[\ ,;\|]/).select(&:present?)
-        puts "COMMAND: [#{cmd}], args: #{args.inspect}"
+        log.info "COMMAND: [#{cmd}], args: #{args.inspect}"
 
-        if cmd == 'plugin'
-          plugin(args.shift, args)
-        else cmd == 'status'
-          api.info("rmud is active")
+        begin
+          log.info "send #{cmd}, #{args}"
+          self.send(cmd, *args)
+        rescue NoMethodError => e
+          api.error "unknown command #{cmd}(#{args.join(',')}): #{e}"
         end
       end
     rescue => e
       api.error(e.inspect)
     end
 
-    def plugin name, params
-      class_name = name.classify
-      if klass = class_name.safe_constantize || "RMud::#{class_name}".safe_constantize
-        if p = @plugins[klass.to_s + params.to_s]
+    def status *args
+      api.info("rmud is active")
+    end
+
+    def find_plugin name
+      name = name.classify
+      [name, "RMud::#{name}", "RMud::Bot::#{name}"].find{|n| n.safe_constantize}.safe_constantize
+    end
+
+    def plugin name, *params
+      klass = find_plugin(name)
+      log.info "Start plugin #{name}#{params}: #{klass}"
+      
+
+      if klass 
+        if p = @plugins[klass.to_s + params.join('_')]
           raise "Plugin [#{klass.to_s}] already started with #{params.to_s}"
         else
           klass.new(self, *params).tap do |p|
-            @plugins[klass.to_s + params.to_s] = p
+            @plugins[klass.to_s + params.join('_')] = p
             @conn.on_line do |line|
               p.process(line)
-            end
+            end 
           end
           api.info("Plugin [#{klass.to_s}] started")
         end
@@ -88,12 +136,20 @@ module RMud
       def initialize bot
         @bot = bot
         @spell = {
-          stoneskin: ['твоя кожа покрывается', 'каменеет']
+          stoneskin: ['твоя кожа покрывается', 'каменеет'],
+          armor: ['Ты чувствуешь, как что-то защищает тебя.', '']
         }
 
         # [:stoneskin, :armor]
-        # @current_spell
+        @current_spell = nil
         @delayed = nil
+
+        bot.scheduler.every(10.seconds) do
+          # bot.api.send('affects')
+        end
+
+        @current_spell  = :armor
+        bot.api.send('cast armor')
       end
 
       def cast spell
@@ -101,6 +157,12 @@ module RMud
       end
 
       def process line
+        if line.include?(@spell[current_spell].first)
+          api.info("OBCATS: #{current_spell} ok")
+        end
+      end
+
+      def process1 line
         if current_data.include?(line)
           current_spell = next1
         elsif line == 'не удалось'

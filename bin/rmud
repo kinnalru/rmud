@@ -47,6 +47,8 @@ Dir.chdir(@opts[:dir])
 
 conn, bot = nil
 
+$log = RMud::Log.new(@opts[:id])
+
 if @opts[:client] == 'tintin'
   conn = RMud::FileConnection.new(dir: @opts[:dir], id: @opts[:id])
   bot = RMud::Bot.new(conn, api_class: RMud::Api::TinTin)
@@ -68,21 +70,21 @@ if @opts[:client] == 'mudlet'
   STDOUT.reopen "./#{@opts[:id]}.stdout"
   STDERR.reopen "./#{@opts[:id]}.stderr"
 
-  conn = RMud::StdConnection.new(id: @opts[:id], input: STDIN, output: out)
-  bot = RMud::Bot.new(conn, api_class: RMud::Api::Mudlet)
+  conn = RMud::StdConnection.new(id: @opts[:id], log: $log, input: STDIN, output: out)
+  bot = RMud::Bot.new(conn, log: $log, api_class: RMud::Api::Mudlet)
 end
 
 
 Signal.trap 'TERM' do
   Thread.new do
-    puts 'Terminating gracefully...'
+    $log.info('Terminating gracefully...')
     bot&.stop rescue nil
   end
 end
 
 Signal.trap 'INT' do
   Thread.new do
-    puts 'Stopping gracefully...'
+    $log.info('Stopping gracefully...')
     bot&.stop rescue nil
   end
 end

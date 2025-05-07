@@ -1,7 +1,7 @@
 module RMud
   class Connection
 
-    attr_reader :id, :handlers, :mx
+    attr_reader :id, :log, :handlers, :mx
 
     REPLACING = {
       'pp_pp' => "'",
@@ -9,8 +9,9 @@ module RMud
       'pp___pp' => "`",
     }
 
-    def initialize(id:)
+    def initialize(id:, log:)
       @id = id
+      @log = log
       
       @mx = Monitor.new
       @termiated = false
@@ -25,6 +26,11 @@ module RMud
 
     def self.unescape line
       REPLACING.each {|(from, to)|  line.gsub!(from, to) } if line
+      line
+    end
+
+    def self.escape line
+      REPLACING.each {|(from, to)|  line.gsub!(to, from) } if line
       line
     end
 
@@ -67,7 +73,12 @@ module RMud
     end
 
     def write(line)
-      synchronize{ do_write(line) } if line
+      if line
+        #esc = self.class.escape(line.to_s.strip)
+        esc = line.to_s.strip
+        log.output(esc)
+        synchronize{ do_write(esc) }
+      end
     end
 
     def wait

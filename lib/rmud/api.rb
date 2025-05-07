@@ -36,12 +36,12 @@ module RMud
       def init
       end
 
-      def send(msg)
+      def transmit(msg)
         @bot.conn.write msg
       end
 
       def echo(msg)
-        send "#showme {#{msg}}"
+        transmit "#showme {#{msg}}"
       end
 
       def info(msg)
@@ -67,58 +67,73 @@ module RMud
       def init
         transmit('')
         script = %{
+       
+          if exists('rmud', 'script') == 0 then
+            permGroup('rmud', 'script');
+          end
+          
+          if exists('rmud_process', 'script') == 0 then
+            permScript('rmud_process', 'rmud', [[ ]]);
+          end
+
+          setScript('rmud_process', [[
+            rmud.process = function(arg)
+              rmud.send(arg .. '\\n')
+            end
+          ]]);
+
+          if exists('rmud_unescape', 'script') == 0 then
+            permScript('rmud_unescape', 'rmud', [[ ]]);
+          end
+
+          setScript('rmud_unescape', [[
+            rmud.unescape = function(arg)
+              local s = arg;
+              s = string.gsub(s, 'pp_pp', "'");
+              s = string.gsub(s, 'pp__pp', '"');
+              s = string.gsub(s, 'pp___pp', "`");
+              return s;
+            end
+          ]]);
+          
           if exists('rmud', 'trigger') == 0 then
             permGroup('rmud', 'trigger');
           end
 
-          if exists('rmud', 'script') == 0 then
-            permGroup('rmud', 'script');
-          end
-
-          display(11111);
-          if exists('rmud_process', 'script') == 0 then
-            permScript('rmud_process', 'rmud', [[
-              rmud_process = function(arg)
-                rmud.send(arg .. '\\n')
-              end
+          if exists('rmud_capture', 'trigger') == 0 then
+            permRegexTrigger('rmud_capture', 'rmud', {'(.*)'}, [[
+              rmud.process(matches[1])
             ]]);
           end
-          display(22222);
 
-          if exists('rmud_capture', 'trigger') == 0 then
-            permRegexTrigger('rmud_capture', 'rmud', {'(.*)'}, [[rmud.send(matches[1] .. '\\n');]]);
+         
+         
+          if exists('rmud', 'alias') == 0 then
+            permGroup('rmud', 'alias');
           end
 
-          # display(rmud)
-          # rmud.rmud_process = function(arg)
-          #   rmud.send(arg .. '\n')
-          # end
-
-          # if exists('rmud', 'alias') == 0 then
-
-          # end
-
-          # if exists('rmud', 'alias') == 0 then
-          #   permGroup('rmud', 'alias');
-          # end
-
-          # if exists('rmud_cmd', 'alias') == 0 then
-          #   permAlias('rmud_cmd', 'rmud', '^rmud (.*)$', [[rmud.send(matches[1] .. '\\n');]]);
-          # end
+          if exists('rmud_process', 'alias') == 0 then
+            permAlias('rmud_process', 'rmud', '^rmud (.*)$', [[rmud.process(matches[1]);]]);
+          end
         }
         info("Initializing objects...")
-        send "#{script}"
+        transmit "#{script}"
         info("Initialized")
       end
 
-      def send(msg)
-        puts msg
+      def transmit(msg)
         @bot.conn.write msg
         @bot.conn.write ''
       end
 
+      def send(command)
+        esc = Connection.escape(command.to_s.strip) 
+        transmit "expandAlias(rmud.unescape(\"#{esc}\"), true);"
+      end
+
       def echo(msg)
-        send "decho(ansi2decho(\"#{msg.to_s}\\n\"))"
+        esc = Connection.escape(msg.to_s.strip)
+        transmit "decho(ansi2decho(rmud.unescape(\"#{esc}\\n\")));"
       end
 
       def info(msg)

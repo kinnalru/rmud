@@ -39,10 +39,11 @@ module RMud
           begin
             while !termiated? && !instream.eof?
               line = instream.gets&.encode("UTF-8")&.rstrip
-              next unless line
+              next if line.nil? || line.empty?
 
               File.write('/tmp/rblog', "read line: #{line}\n", mode: 'a+')
-              process(line)
+              
+              process(log.input(line))
               Thread.pass
             end
             instream.close
