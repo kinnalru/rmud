@@ -1,23 +1,6 @@
 class TrainSpell < Plugin
 
-  SPELLS = {
-    armor:      {
-      name:    'armor',
-      success: ['Hа тебе уже есть магическая защита.', 'Ты чувствуешь, как что-то защищает тебя.'],
-    },
-    cure_light: {
-      name:    'cure light',
-      success: ['Ты уже здоров, как бык.']
-    },
-    detect_magic: {
-      name:    'detect magic',
-      success: ['Ты чувствуешь покалывание в глазах.', 'Ты не можешь чувствовать магию ещё лучше.']
-    },
-    shield:{
-      name: 'shield',
-      success: ['Тебя уже защищает магический щит.', 'Ты окружаешься волшебным силовым щитом.']
-    }
-  }
+SPELLS = ::C7i::SPELLS
 
 
 #Ты улучшаешь своё умение cure light.
@@ -30,37 +13,37 @@ class TrainSpell < Plugin
   # LOGIN_RX = /\A[A-Z0-9_]+\z/i.freeze
   # FULL_RX = /(?<email>#{EMAIL_RX})|(?<login>#{LOGIN_RX})/.freeze
 
+  set_deps('State')
+
   def initialize(bot, spell, *args, **kwargs)
     @spell = spell.to_s.strip.to_sym
     super
+    info(2)
 
     @current = SPELLS.fetch(@spell)
+    info(3)
     @stats = {}
 
+    info(4)
     start
   end
 
   TEXT = '
 
+
 Level  1: armor              100%,   1 mana   magic missile      100%,   1 mana
           ventriloquate        1%,   1 mana
-Level  2: detect magic         1%,   1 mana
+Level  2: detect magic        92%,   1 mana
 Level  3: cure light         100%,   1 mana   detect invis         1%,   1 mana
-Level  4: chill touch         недоступно      floating disc       недоступно   
-          shield              недоступно   
-Level  5: faerie fire         недоступно      invisibility        недоступно   
-Level  6: continual light     недоступно   
-Level  7: burning hands       недоступно   
-Level  8: bless               недоступно      create water        недоступно   
-          cure blindness      недоступно      refresh             недоступно   
-          remove splinters    недоступно   
-Level  9: detect poison       недоступно      infravision         недоступно   
-          locate object       недоступно      recharge            недоступно   
-Level 10: create food         недоступно      create rose         недоступно   
-          cure serious        недоступно      fly                 недоступно   
-          shocking grasp      недоступно      sleep               недоступно   
-Level 11: detect alignment    недоступно      giant strength      недоступно   
-          protection evil     недоступно      protection good     недоступно  
+Level  4: chill touch         17%,   1 mana   floating disc        1%,   3 mana
+          shield             100%,   1 mana
+Level  5: faerie fire        100%,   1 mana   invisibility         1%,   1 mana
+Level  6: continual light     57%,   1 mana
+Level  7: burning hands       24%,   1 mana
+Level  8: bless                7%,   1 mana   create water         1%,   1 mana
+          cure blindness       1%,   1 mana   refresh              1%,   1 mana
+          remove splinters     1%,   1 mana
+
 '
 
   def parse_all text
@@ -68,7 +51,7 @@ Level 11: detect alignment    недоступно      giant strength      не
     text.split('mana').map(&:strip).compact.map do |line|
       puts "LINE:#{line.inspect}"
       md = spell_rx.match(line)
-      puts md
+      info(md.inspect)
       md
     end.compact.map{|md| md.named_captures.transform_values{|v| v.strip}}
   end
@@ -82,13 +65,14 @@ Level 11: detect alignment    недоступно      giant strength      не
   end
 
   def start
-
+    info(5)
     bot.bus.subscribe(State::SPELL_STATE_EVENT) do |event|
       if event.payload[:spell] == @current[:name] && event.payload[:level].to_i == 100
         completed
       end
     end
 
+    info(6)
     bot.bus.subscribe(State::SPELL_STATE_FINISHED_EVENT) do |event|
       cast
     end

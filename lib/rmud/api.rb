@@ -140,6 +140,14 @@ module RMud
         echo("[#{'INFO'.cyan}] #{msg}")
       end
 
+      def warn(msg)
+        echo("[#{'WARN'.light_yellow}] #{msg}")
+      end
+
+      def danger(msg)
+        echo("[#{'DANG'.light_red}] #{msg}")
+      end
+
       def error(msg)
         echo("[#{'ERROR'.red}] #{msg}")
       end

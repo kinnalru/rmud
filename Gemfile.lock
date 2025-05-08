@@ -4,6 +4,7 @@ PATH
     rmud (0.0.1)
       activesupport (~> 6.0)
       colorize
+      concurrent-ruby
 
 GEM
   remote: https://rubygems.org/
