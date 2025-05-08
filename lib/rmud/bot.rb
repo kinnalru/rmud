@@ -8,6 +8,8 @@ module RMud
 
       @botlog = File.open("./#{id}.bot.log", "w+")
       @botlog.sync = true
+
+
     end
 
     def input string
@@ -34,13 +36,14 @@ module RMud
   end
 
   class Bot
-    attr_reader :conn, :log, :scheduler, :api
+    attr_reader :conn, :log, :scheduler, :api, :bus
 
     CMD_RX = /\Armud[\ ]+(?<cmd>[^\ ]+)[\ ]*(?<args>.*)\Z/
 
     def initialize(conn, api_class: RMud::Api::TinTin, log:)
       @conn = conn
       @log = log
+      @bus = ActiveSupport::Notifications
 
       o = Output.new(self, file: "#{conn.id}_tells.log")
       @conn.on_line do |line|
@@ -55,6 +58,11 @@ module RMud
         File.write("/tmp/full.log", line + "\n", mode: "a")
         process(line)
       end
+    end
+
+    def notify event, payload = nil
+      log.info("NOTIFY:#{event}")
+      bus.instrument(event, payload)
     end
 
     def start(block: false)
@@ -96,6 +104,7 @@ module RMud
       end
     rescue => e
       api.error(e.inspect)
+      log.info(e.backtrace)
     end
 
     def status *args

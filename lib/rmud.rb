@@ -13,4 +13,5 @@ require_relative 'rmud/output'
 require_relative 'rmud/api'
 require_relative 'rmud/plugin'
 require_relative 'rmud/plugin/train_spell'
+require_relative 'rmud/state'
 

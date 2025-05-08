@@ -3,11 +3,19 @@ class TrainSpell < Plugin
   SPELLS = {
     armor:      {
       name:    'armor',
-      success: ['Hа тебе уже есть магическая защита.', 'Ты чувствуешь, как что-то защищает тебя.']
+      success: ['Hа тебе уже есть магическая защита.', 'Ты чувствуешь, как что-то защищает тебя.'],
     },
     cure_light: {
       name:    'cure light',
       success: ['Ты уже здоров, как бык.']
+    },
+    detect_magic: {
+      name:    'detect magic',
+      success: ['Ты чувствуешь покалывание в глазах.', 'Ты не можешь чувствовать магию ещё лучше.']
+    },
+    shield:{
+      name: 'shield',
+      success: ['Тебя уже защищает магический щит.', 'Ты окружаешься волшебным силовым щитом.']
     }
   }
 
@@ -74,7 +82,18 @@ Level 11: detect alignment    недоступно      giant strength      не
   end
 
   def start
-    send('spells')
+
+    bot.bus.subscribe(State::SPELL_STATE_EVENT) do |event|
+      if event.payload[:spell] == @current[:name] && event.payload[:level].to_i == 100
+        completed
+      end
+    end
+
+    bot.bus.subscribe(State::SPELL_STATE_FINISHED_EVENT) do |event|
+      cast
+    end
+
+    bot.notify(State::REFRESH_SPELL_STATE_EVENT)
   end
 
   def completed
@@ -100,7 +119,6 @@ Level 11: detect alignment    недоступно      giant strength      не
       if level == 100
         completed
       else
-        info('CAST')
         cast
       end
     elsif @current[:success].any?{|s| s.strip == line.strip }
@@ -109,6 +127,8 @@ Level 11: detect alignment    недоступно      giant strength      не
       cast
     elsif @waiting && line.strip == 'Ты не смог сосредоточиться.'
       cast
+    elsif line.strip == "Ты теперь в совершенстве знаешь #{@current[:name]}!"
+      completed
     end
   end
 
