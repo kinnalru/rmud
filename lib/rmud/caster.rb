@@ -70,9 +70,21 @@ class Caster < Plugin
     s.promise
   end
 
+  def complete!(promise, result = 1)
+    @queue.reject! do |action|
+      if action.promise == promise
+        action.promise.fulfill(result)
+      end
+    end
+    if @current.promise == promise
+      completed(result)
+    end
+
+  end
+
   def completed(result = 1)
     @casting = false
-    info("completed #{@current.name} on #{@current.target.inspect}")
+    info("completed #{@current.name.to_s.light_cyan} #{@current.target}")
     @current.promise.fulfill(result)
     @current = nil
     trynext
@@ -85,7 +97,7 @@ class Caster < Plugin
     return unless @current
 
     @casting = true
-    info("casting #{@current.name} on #{@current.target.inspect}")
+    info("casting #{@current.name.to_s.light_cyan} on #{@current.target.inspect}")
     @current.start!
     if @current.skill?
       send("#{@current.name} #{@current.target}".strip)

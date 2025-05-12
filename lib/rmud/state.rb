@@ -92,7 +92,7 @@ class State < Plugin
 
   end
 
-  attr_reader :hp
+  attr_reader :hp, :spells
 
   def initialize(bot, *args, **kwargs)
     @spells = {}
@@ -150,7 +150,7 @@ class State < Plugin
     parse_spell_states(line).each do |state|
       @in_state = true
       st = @spells[state[:spell]] = state
-      info("STATE:#{st}")
+      #info("STATE:#{st}")
       bot.notify(SPELL_STATE_EVENT, st)
     end
   end

@@ -58,6 +58,11 @@ module RMud
         File.write('/tmp/full.log', line + "\n", mode: 'a')
         process(line)
       end
+
+      @scheduler.after(2.second) do
+        plugin('Messages')
+      end
+      
     end
 
     def notify(event, payload = nil)
@@ -90,9 +95,7 @@ module RMud
     end
 
     def plugin_command!(cmd, *args)
-      api.info(cmd)
       if (p = @plugins[find_plugin(cmd).to_s])
-        api.info("#{p}.send(#{args})")
         p.__send__(*args)
         true
       end
@@ -101,7 +104,7 @@ module RMud
     def process(line)
       if (md = CMD_RX.match(line))
         cmd = md[:cmd].strip
-        args = md[:args].split(/[\ ,;\|]/).select(&:present?)
+        args = md[:args].split(/[,;\|]/).select(&:present?)
         log.info "COMMAND: [#{cmd}], args: #{args.inspect}"
 
         return if plugin_command!(cmd, *args)
@@ -123,8 +126,9 @@ module RMud
     end
 
     def find_plugin(name)
+      prev = name
       name = name.classify
-      [name, "RMud::#{name}", "RMud::Bot::#{name}"].find{|n| n.safe_constantize }.safe_constantize
+      [prev, "RMud::#{prev}", name, "RMud::#{name}", "RMud::Bot::#{name}"].find{|n| n.safe_constantize }.safe_constantize
     end
 
     def plugin name, *params
@@ -133,7 +137,7 @@ module RMud
 
       raise "Unknown plugin #{name}" unless klass
 
-      return p if @plugins[klass.to_s]
+      return @plugins[klass.to_s] if @plugins[klass.to_s]
 
       klass.new(self, *params).tap do |p|
         @plugins[klass.to_s] = p

@@ -1,17 +1,119 @@
 class Assist < Plugin
 
+  set_deps('State', 'Caster')
+
+  def self.feature(name, &block)
+    define_method("enable_#{name}") do |*args|
+      @features[name.to_sym] = args + [true]
+      info("enabled: #{@features}")
+      if block_given?
+        instance_exec(*args, &block)
+      end
+    end
+
+    define_method("disable_#{name}") do
+      @features[name.to_sym] = false
+    end
+  end
+
+  feature(:trip)
+  feature(:kick)
+  feature(:bash)
+  feature(:dirt)
+
   def initialize(bot, *args, **kwargs)
     @features = {}
+    @actives = {}
     super
+
+
     bot.scheduler.every(3.second) do
-      check_health rescue nil
-      trip rescue nil
+      heal
+
+      @features.to_a.shuffle.each do |f, enabled|
+        __send__(f) if enabled
+      rescue => e
+        error(e.inspect)
+        error(e.backtrace)
+      end
     end
 
     subscribe(State::STATE_HP_LOW_EVENT) do
-      check_health
+      heal
     end
   end
+
+  def feature?(name)
+    @features[name.to_sym]
+  end
+
+  def active?(name = nil)
+    if name
+      @actives[name.to_sym]
+    else
+      @actives.values.any?
+    end
+  end
+
+  def activate(name)
+    @actives[name.to_sym] = true
+  end
+
+  def deactivate(name)
+    @actives[name.to_sym] = false
+  end
+
+  def heal
+    return if active?(:heal)
+    return if deps[State].hp.value > 90
+    
+    activate(:heal)
+    deps[Caster].cast(:cure_serious).then do |_r|
+      deactivate(:heal)
+    end
+  end
+
+  def trip  
+    return if !feature?(:trip) || !battle? || low_hp?
+    return if active?
+
+    activate(:trip)
+    deps[Caster].skill(:trip).then do |_r|
+      deactivate(:trip)
+    end
+  end
+
+  def kick
+    return if !feature?(:kick) || !battle? || low_hp?
+    return if active?
+
+    activate(:kick)
+    deps[Caster].skill(:kick).then do |_r|
+      deactivate(:kick)
+    end
+  end
+
+  def bash
+    return if !feature?(:bash) || !battle? || low_hp?
+    return if active?
+
+    activate(:bash)
+    deps[Caster].skill(:bash).then do |_r|
+      deactivate(:bash)
+    end
+  end
+
+  def dirt
+    return if !feature?(:dirt) || !battle? || low_hp?
+    return if active?
+
+    activate(:dirt)
+    deps[Caster].skill(:dirt).then do |_r|
+      deactivate(:dirt)
+    end
+  end
+
+
 
   def battle?
     deps[State].battle?
@@ -25,7 +127,7 @@ class Assist < Plugin
     deps[State].hp.critical?
   end
 
-  set_deps('State', 'Caster')
+
 
   def process(line); end
 
@@ -37,46 +139,8 @@ class Assist < Plugin
     self.__send__("disable_#{feature}", *)
   end
 
-  def enable_trip *_args
-    info('enable tripe')
-    @features[:trip] = true
-  end
 
-  def disable_trip *_args
-    @features[:trip] = false
-  end
 
-  def trip
-    #info("Tripping...#{@features} #{@features[:trip]} #{battle?} #{!low_hp?}")
-    return if !@features[:trip] || !battle? || low_hp?
-    return if @triping ||  @healing
-
-    info("Feaures:#{@features}. B[#{battle?}] L[#{low_hp?}]")
-
-    @triping = true
-    deps[Caster].skill(:trip).then do |_r|
-      @triping = false
-    end
-  end
-
-  def check_health
-    if deps[State].hp.value <= 90
-      #info("HP <= 90 HEAL")
-      heal 
-    else
-      #info("...HP > 90 skip...")
-    end
-  end
-
-  def heal
-    return if @healing
-
-    @healing = true
-
-    deps[Caster].cast(:cure_light).then do |_r|
-      @healing = false
-    end
-  end
 
 end
 

@@ -77,8 +77,10 @@ module RMud
           end
 
           setScript('rmud_process', [[
-            rmud.process = function(arg)
-              rmud.send(arg .. '\\n')
+            if rmud then
+              rmud.process = function(arg)
+                rmud.send(arg .. '\\n')
+              end
             end
           ]]);
 
@@ -87,12 +89,14 @@ module RMud
           end
 
           setScript('rmud_unescape', [[
-            rmud.unescape = function(arg)
-              local s = arg;
-              s = string.gsub(s, 'pp_pp', "'");
-              s = string.gsub(s, 'pp__pp', '"');
-              s = string.gsub(s, 'pp___pp', "`");
-              return s;
+            if rmud then
+              rmud.unescape = function(arg)
+                local s = arg;
+                s = string.gsub(s, 'pp_pp', "'");
+                s = string.gsub(s, 'pp__pp', '"');
+                s = string.gsub(s, 'pp___pp', "`");
+                return s;
+              end
             end
           ]]);
           
@@ -102,7 +106,9 @@ module RMud
 
           if exists('rmud_capture', 'trigger') == 0 then
             permRegexTrigger('rmud_capture', 'rmud', {'(.*)'}, [[
-              rmud.process(matches[1])
+              if rmud and rmud.process then
+                rmud.process(matches[1])
+              end
             ]]);
           end
 
@@ -113,7 +119,11 @@ module RMud
           end
 
           if exists('rmud_process', 'alias') == 0 then
-            permAlias('rmud_process', 'rmud', '^rmud (.*)$', [[rmud.process(matches[1]);]]);
+            permAlias('rmud_process', 'rmud', '^rmud (.*)$', [[
+              if rmud and rmud.process then
+                rmud.process(matches[1]);
+              end
+            ]]);
           end
         }
         info("Initializing objects...")
