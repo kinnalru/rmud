@@ -10,6 +10,8 @@ class State < Plugin
   STATE_HP_LOW_EVENT = 'state_hp_low'
   STATE_HP_NORMAL_EVENT = 'state_hp_normal'
 
+  STATE_PROMPT_EVENT = 'state_prompt'
+
   HP_RX = %r{(?<hp>\d+)/(?<hpmax>\d+)hp}
   MP_RX = %r{(?<mp>\d+)/(?<mpmax>\d+)mp}
   MV_RX = %r{(?<mv>\d+)/(?<mvmax>\d+)mv}
@@ -139,6 +141,7 @@ class State < Plugin
       end
 
       @battle = !!md[:battle]
+      bot.notify(STATE_PROMPT_EVENT)
     end
 
     if (line.empty? || line[0] == '<') && @in_state

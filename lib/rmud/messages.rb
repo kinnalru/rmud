@@ -38,14 +38,25 @@ class Messages < Plugin
     info("Initialized")
   end
 
+  TELLS_RX=[
+    /^.* (?<who>.*) произноси.* '(?<text>.*)'$/,
+    /^.* (?<who>.*) говорит тебе '(?<text>.*)'$/,
+    /^.* (?<who>.*) говорят|говорит|отвечает|спрашивает.* '(?<text>.*)'$/
+  ]
+
   SAY_RX=/^.*Ты произносишь '(.*)'$/
   SKILL_RX=/^Ты улучшаешь своё умение (.*).*$/
   SKILL2_RX=/^Осознав свои ошибки, ты становишься более искусным в (.*).*$/
   OOC_RX=/^.*\[OOC\](.*):(.*)/
   ALL_RX=/говорят|говорит|отвечает|спрашивает/
 
+  #[2025-05-12 17:23:14 +0300] # Freyr говорит тебе 'ладно пойду дальше работать -)'
+
   def process(line)
-    if md = SAY_RX.match(line)
+    if (md = TELLS_RX.map{|rx| rx.match(line)}.compact.first)
+      info(md)
+      post(line.sub(md[:who], md[:who].light_white).sub(md[:text], md[:text].light_green))
+    elsif md = SAY_RX.match(line)
       post(line.sub(md[1], md[1].light_green))
     elsif md = (SKILL_RX.match(line) || SKILL2_RX.match(line))
         post(line.sub(md[1], md[1].light_white))
