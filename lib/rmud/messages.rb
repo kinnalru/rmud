@@ -54,7 +54,6 @@ class Messages < Plugin
 
   def process(line)
     if (md = TELLS_RX.map{|rx| rx.match(line)}.compact.first)
-      info(md)
       post(line.sub(md[:who], md[:who].light_white).sub(md[:text], md[:text].light_green))
     elsif md = SAY_RX.match(line)
       post(line.sub(md[1], md[1].light_green))
