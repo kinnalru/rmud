@@ -39,16 +39,17 @@ module RMud
     attr_reader :conn, :log, :scheduler, :api, :bus
 
     CMD_RX = /\Armud[\ ]+(?<cmd>[^\ ]+)[\ ]*(?<args>.*)\Z/
+    LINE_EVENT = 'bot_line'
 
     def initialize(conn, log:, api_class: RMud::Api::TinTin)
       @conn = conn
       @log = log
       @bus = ActiveSupport::Notifications
 
-      o = Output.new(self, file: "#{conn.id}_tells.log")
-      @conn.on_line do |line|
-        o.process(line)
-      end
+      # o = Output.new(self, file: "#{conn.id}_tells.log")
+      # @conn.on_line do |line|
+      #   o.process(line)
+      # end
 
       @plugins = {}
       @scheduler = Scheduler.new
@@ -56,6 +57,7 @@ module RMud
 
       @conn.on_line do |line|
         File.write('/tmp/full.log', line + "\n", mode: 'a')
+        notify(LINE_EVENT, line)
         process(line)
       end
 
@@ -143,6 +145,8 @@ module RMud
         @plugins[klass.to_s] = p
         @conn.on_line do |line|
           p.process(line)
+        rescue => e
+          api.error "[#{p.class}]:#{e.inspect}"
         end
         api.info("Plugin [#{klass}] started")
       end

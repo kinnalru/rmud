@@ -44,7 +44,7 @@ class Plugin
     raise NotImplementedError.new("#{self.class}##{__method__}")
   end
 
-  def status(*args)
+  def status(*_args)
     info('active')
   end
 
@@ -73,7 +73,37 @@ class Plugin
   end
 
   def subscribe(event, &)
-    @subscriptions << bot.bus.subscribe(event, &)
+    @subscriptions << bot.bus.subscribe do |e|
+      yield(e)
+    rescue => e
+      error(e.inspect)
+    end
+  end
+
+  def unsubscribe(s)
+    bot.bus.unsubscribe(s)
+    @subscriptions.delete(s)
+  end
+
+  def subscribe_once(event)
+    s = bot.bus.subscribe(event) do |*args, **kwargs|
+      unsubscribe(s)
+      yield(*args, **kwargs)
+    end
+    @subscriptions << s
+  end
+
+  def match(line, rxs)
+    line = [line].flatten.join(' ')
+    line = line.split("\n").join(' ').gsub(/\s+/, ' ').strip
+
+    rxs = [rxs].flatten
+    rxs.each do |rx|
+      if (md = rx.match(line))
+        return md
+      end
+    end
+    nil
   end
 
 end

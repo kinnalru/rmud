@@ -18,6 +18,7 @@ require_relative 'rmud/plugin/train_spell'
 require_relative 'rmud/state'
 require_relative 'rmud/assist'
 require_relative 'rmud/caster'
+require_relative 'rmud/plugin/quest'
 require_relative 'rmud/plugin/train_battle'
 
 
