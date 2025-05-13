@@ -15,7 +15,8 @@ class TrainBattle < Plugin
     end
 
     bot.scheduler.every(60.seconds) do
-      send("wear #{['spear', 'axe', 'sword', 'глефа', 'flail', 'whip'].shuffle.first}")
+      #send("wear #{['spear', 'axe', 'sword', 'глефа', 'flail', 'whip'].shuffle.first}")
+      send("wear #{['axe'].shuffle.first}")
     end
   end
 
@@ -30,11 +31,11 @@ class TrainBattle < Plugin
       
       # send("c 'create water' water")
       send('stop')
-      send("c 'create food'")
-      send("c 'create food'")
-      send("c 'create food'")
-      send("c 'create food'")
-      send("take all*mush")
+      # send("c 'create food'")
+      # send("c 'create food'")
+      # send("c 'create food'")
+      # send("c 'create food'")
+      # send("take all*mush")
       deps[Caster].cast(:shield)
       deps[Caster].cast(:armor)
       deps[Caster].cast(:bless).then do |_r|
@@ -47,7 +48,11 @@ class TrainBattle < Plugin
     @battle = true if battle? && !@battle
     return if @battle || @refresh
 
-    send("kill '#{@targets.shuffle.first}'")
+    send("c 'inv'")
+    send("hide")
+    send("hide")
+    send("hide")
+    send("back '#{@targets.shuffle.first}'")
   end
 
   def battle?
