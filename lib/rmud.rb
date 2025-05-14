@@ -1,6 +1,8 @@
 
 
 require 'logger'
+require 'concurrent-ruby'
+require 'concurrent/promise'
 
 require_relative 'rmud/version'
 require_relative 'rmud/connection'

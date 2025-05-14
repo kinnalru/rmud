@@ -82,17 +82,17 @@ class Quest < Plugin
   end
 
 
-  AREAS={
+  AREAS = {
     'Zoo of Midgaard' => {
-      run: '6sesws',
-      #run: 'sn',
-      track:'s;e;e'
+      run:   '6sesws',
+      # run: 'sn',
+      track: 's;e;e(Вход в детскую секцию);e;n;s;e;n(В вольере)[D];n;w;e;s;s;s(Конюшня)[D]'
     }
   }
 
 
-  DEFINITION_RX=/(?<direction>.)(\[(?<door>D)*(?<lock>L)*\])*/
-  Step = Struct.new('Step', :definition) do
+  DEFINITION_RX = /(?<direction>.)(\((?<name>.*)\))?(\[(?<door>D)*(?<lock>L)*\])?/
+  Step = Struct.new('Step', :definition, :door, :lock, :name) do
     attr_reader :dir
 
     def initialize(definition, *args)
@@ -100,87 +100,85 @@ class Quest < Plugin
       @definition = definition
       md = DEFINITION_RX.match(@definition)
       @dir = md[:direction]
-      @door = true if md[:door] || md[:lock]
-      @lock = true if md[:lock]
+      self.door = true if md[:door] || md[:lock]
+      self.lock = true if md[:lock]
+      self.name = md[:name]
     end
 
     def lock?
-      @lock
+      lock
     end
 
     def door?
-      @door
+      door
     end
-
   end
 
-  def run area
+  def run(area)
     @area = AREAS[area]
     send("run #{@area[:run]}")
   end
 
   def track
+    @num = 0
     @track = @area[:track].split(';')
-    step
-  end
-
-  def step
     if @track.empty?
-      info "completed"
+      info 'Empty track'
       return
     end
-    @current = Step.new(@track.shift)
-    p = action do
-      send("pick #{@current.dir}") if @current.lock? 
+    do_step(Step.new(@track.shift))
+  end
+
+  def do_step(step)
+    @num += 1
+    @current = step
+    action = await_action("step_#{@current.dir}_#{@num}") do
+      send("pick #{@current.dir}") if @current.lock?
       send("unlock #{@current.dir}") if @current.lock?
-      send("open #{@current}") if @current.door?
-      send(@current.dir)
+      send("open #{@current.dir}") if @current.door?
+      send("#{@current.dir}")
     end
-    p.then do
-      perform_step
+
+    action.then do |_id, _success, *_args|
+      if @current.name
+        safe_execute do
+          do_control.then do |success, *_rest|
+            raise "Control #{@current.name} failed" unless success
+
+            safe_execute{ do_observe }
+          end.rescue do |*args|
+            error "track failed: #{args}"
+          end
+        end
+      else
+        safe_execute{ do_observe }
+      end
+    end.rescue do |*args|
+      info("do_step[#{step}] failed: #{args}")
     end
   end
 
-  def perform_step
-    info "STEP COMPLETED"
-    p = await_line(/К прилавку прибита табличка/) do
+  def do_control
+    await_line("control_#{@current.dir}_#{@num}", /#{@current.name}/, duration: 5.seconds) do
       send('look')
     end
-    p.then do |log|
-      info "COMPLETED !!!!"
-      warn log
-    end
   end
 
-  def await_line rx
-    p = Concurrent::Promises.resolvable_future
-    a= action do
-      log = ''
-      s = subscribe(::RMud::Bot::LINE_EVENT) do |event|
-        log << event.payload.to_s << "\n"
-        if event.payload && rx.match(event.payload)
-          unsubscribe(s)
-          p.fulfill(log)
-        end
-      end
-      yield
+  def do_observe
+    action = await_line("observe_#{@current.dir}_#{@num}", /разные подковы и кожаные снасти крепко/,
+      duration: 5.seconds) do
+      send('look')
     end
-    p
-  end
 
-
-  def action
-    p = Concurrent::Promises.resolvable_future
-    id = "action:#{rand(10000)}"
-    s = subscribe(::RMud::Bot::LINE_EVENT) do |event|
-      if event.payload && event.payload["#{id}:completed"]
-        unsubscribe(s)
-        p.fulfill(true)
+    action.then do |success, _lines, md, _args|
+      if success
+        info("COMPLETED: #{md}")
+      else
+        do_step(Step.new(@track.shift))
       end
+    end.rescue do |*args|
+      info("do_observe failed: #{args}")
     end
-    yield
-    send("gtel #{id}:completed")
-    p
   end
 
 
@@ -248,8 +246,8 @@ class Quest < Plugin
 Sorcery'. Было бы весьма отрадно узнать о его смерти. Правда, на слово я не
 поверю.
 ),
-%{
-Мастер гильдии Воинов говорит тебе очень тихо: 
+    %{
+Мастер гильдии Воинов говорит тебе очень тихо:
 - Есть одно дельце для тебя. Есть такая... драчливая рыба. Тут у меня случайно
 завалялся рисунок,- показывает тебе его и прячет куда-то,-  Это где-то в 'Southern
 Road'. По слухам, за её голову (или другое доказательство смерти) обещают

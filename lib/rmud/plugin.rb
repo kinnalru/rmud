@@ -72,10 +72,10 @@ class Plugin
     bot.notify(event, payload)
   end
 
-  def subscribe(event, &)
+  def subscribe(_event, &)
     @subscriptions << bot.bus.subscribe do |e|
       yield(e)
-    rescue => e
+    rescue StandardError => e
       error(e.inspect)
     end
     @subscriptions.last
@@ -87,11 +87,10 @@ class Plugin
   end
 
   def subscribe_once(event)
-    s = subscribe(event) do |*args, **kwargs|
+    subscribe(event) do |*args, **kwargs|
       unsubscribe(s)
       yield(*args, **kwargs)
     end
-    s
   end
 
   def match(line, rxs)
@@ -105,6 +104,68 @@ class Plugin
       end
     end
     nil
+  end
+
+  def await_action name, *args, duration: 60.seconds
+    Concurrent::Promises.resolvable_future.tap do |promise|
+      id = "action[#{name}]:#{rand(10_000)}"
+      s = subscribe(::RMud::Bot::LINE_EVENT) do |event|
+        if event.payload && event.payload["#{id}:completed"]
+          unsubscribe(s)
+          promise.fulfill([id, true, *args])
+        end
+      end
+      bot.scheduler.after duration do
+        unsubscribe(s)
+        promise.reject([id, false, *args], false)
+      end
+      yield
+      send("gtel #{id}:completed")
+    end
+  end
+
+  def await_line name, rxs, *args, duration: 60.seconds
+    Concurrent::Promises.resolvable_future.tap do |promise|
+      lines = ''
+      s = nil
+      a = await_action(name, duration: duration) do
+        s = subscribe(::RMud::Bot::LINE_EVENT) do |event|
+          line = event.payload.to_s
+          lines << line << "\n"
+          if event.payload && (md = match(line, rxs))
+            unsubscribe(s)
+            promise.fulfill([true, lines, md, *args])
+          end
+        end
+        yield
+      end
+
+      a.then do |id, *rest|
+        unsubscribe(s)
+        next if promise.resolved?
+
+        warn("await_line action[#{id}] rejected: #{rest.inspect}")
+        promise.fulfill([false, lines, nil, *args], false)
+      rescue StandardError => e
+        error("Exception in action result: #{e.inspect}")
+      end
+
+      a.rescue do |e, *rest|
+        unsubscribe(s)
+        next if promise.resolved?
+
+        error("await_line action[#{e}] failed: #{rest.inspect}")
+        promise.reject([false, lines, nil, *args], false)
+      rescue StandardError => e
+        error("Exception in action rescuing: #{e.inspect}")
+      end
+    end
+  end
+
+  def safe_execute(&block)
+    block.call
+  rescue StandardError => e
+    error "Exception: #{e.inspect}"
   end
 
 end
