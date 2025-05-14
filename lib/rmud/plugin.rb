@@ -78,6 +78,7 @@ class Plugin
     rescue => e
       error(e.inspect)
     end
+    @subscriptions.last
   end
 
   def unsubscribe(s)
@@ -86,11 +87,11 @@ class Plugin
   end
 
   def subscribe_once(event)
-    s = bot.bus.subscribe(event) do |*args, **kwargs|
+    s = subscribe(event) do |*args, **kwargs|
       unsubscribe(s)
       yield(*args, **kwargs)
     end
-    @subscriptions << s
+    s
   end
 
   def match(line, rxs)
