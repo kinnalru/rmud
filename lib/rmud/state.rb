@@ -12,6 +12,9 @@ class State < Plugin
 
   STATE_PROMPT_EVENT = 'state_prompt'
 
+  STATE_BATTLE_EVENT = 'state_battle'
+  STATE_BATTLE_FINISHED_EVENT = 'state_battle_finished'
+
   HP_RX = %r{(?<hp>\d+)/(?<hpmax>\d+)hp}
   MP_RX = %r{(?<mp>\d+)/(?<mpmax>\d+)mp}
   MV_RX = %r{(?<mv>\d+)/(?<mvmax>\d+)mv}
@@ -140,7 +143,15 @@ class State < Plugin
         hp_changed(*changed)
       end
 
-      @battle = !!md[:battle]
+      if @battle != !!md[:battle]
+        if (@battle = !!md[:battle])
+            notify(STATE_BATTLE_EVENT)
+        else
+            notify(STATE_BATTLE_FINISHED_EVENT)
+        end
+      end
+
+      
       bot.notify(STATE_PROMPT_EVENT)
     end
 

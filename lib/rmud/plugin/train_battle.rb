@@ -14,9 +14,9 @@ class TrainBattle < Plugin
       error(e.inspect)
     end
 
-    bot.scheduler.every(60.seconds) do
+    bot.scheduler.every(20.seconds) do
       #send("wear #{['spear', 'axe', 'sword', 'глефа', 'flail', 'whip'].shuffle.first}")
-      send("wear #{['axe'].shuffle.first}")
+      send("wear #{['whip'].shuffle.first}")
     end
   end
 

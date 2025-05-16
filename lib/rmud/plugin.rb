@@ -72,13 +72,31 @@ class Plugin
     bot.notify(event, payload)
   end
 
-  def subscribe(_event, &)
-    @subscriptions << bot.bus.subscribe do |e|
-      yield(e)
-    rescue StandardError => e
-      error(e.inspect)
+  def subscribe(event, &)
+    s = nil
+    s = bot.bus.subscribe(event) do |ev|
+      ev.instance_variable_set('@__subscription', s)
+      ev.instance_eval do
+        def subscription
+          @__subscription
+        end
+      end
+
+      yield(ev)
+    rescue StandardError => ex
+      STDERR.puts ex.backtrace
+      error(ex.inspect)
     end
-    @subscriptions.last
+    s.instance_variable_set('@__plugin', self)
+    @subscriptions << s
+    
+    s.instance_eval do
+      def unsubscribe
+        instance_variable_get('@__plugin').unsubscribe(self)
+      end
+    end
+
+    s
   end
 
   def unsubscribe(s)
@@ -87,9 +105,9 @@ class Plugin
   end
 
   def subscribe_once(event)
-    subscribe(event) do |*args, **kwargs|
-      unsubscribe(s)
-      yield(*args, **kwargs)
+    subscribe(event) do |event|
+      event.subscription.unsubscribe
+      yield(event)
     end
   end
 
@@ -111,16 +129,18 @@ class Plugin
       id = "action[#{name}]:#{rand(10_000)}"
       s = subscribe(::RMud::Bot::LINE_EVENT) do |event|
         if event.payload && event.payload["#{id}:completed"]
-          unsubscribe(s)
+          event.subscription.unsubscribe
           promise.fulfill([id, true, *args])
         end
       end
+
       bot.scheduler.after duration do
-        unsubscribe(s)
-        promise.reject([id, false, *args], false)
+        s.unsubscribe
+        promise.reject([StandardError.new("action[#{name}] timeout!"), *args], false)
       end
+
       yield
-      send("gtel #{id}:completed")
+      send("help #{id}:completed")
     end
   end
 
@@ -128,36 +148,28 @@ class Plugin
     Concurrent::Promises.resolvable_future.tap do |promise|
       lines = ''
       s = nil
-      a = await_action(name, duration: duration) do
+      action = await_action(name, duration: duration) do
         s = subscribe(::RMud::Bot::LINE_EVENT) do |event|
           line = event.payload.to_s
           lines << line << "\n"
           if event.payload && (md = match(line, rxs))
-            unsubscribe(s)
+            event.subscription.unsubscribe
             promise.fulfill([true, lines, md, *args])
           end
         end
         yield
       end
 
-      a.then do |id, *rest|
-        unsubscribe(s)
+      action.then do |id, success, *rest|
+        s.unsubscribe
         next if promise.resolved?
 
-        warn("await_line action[#{id}] rejected: #{rest.inspect}")
-        promise.fulfill([false, lines, nil, *args], false)
-      rescue StandardError => e
-        error("Exception in action result: #{e.inspect}")
-      end
-
-      a.rescue do |e, *rest|
-        unsubscribe(s)
+        raise StandardError.new("action[#{name}] completed without result")
+      end.rescue do |e, *rest|
+        s.unsubscribe
         next if promise.resolved?
 
-        error("await_line action[#{e}] failed: #{rest.inspect}")
-        promise.reject([false, lines, nil, *args], false)
-      rescue StandardError => e
-        error("Exception in action rescuing: #{e.inspect}")
+        promise.reject([e, *rest], false)
       end
     end
   end
