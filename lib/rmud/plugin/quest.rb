@@ -2,12 +2,44 @@ class Quest < Plugin
 
   set_deps('State', 'Caster', 'Assist')
 
-  attr_reader :target_area
+  attr_reader :target_area, :quest
+
+  Quest = Struct.new('Quest', :type, :area, :targets, :num, :questor) do
+    def path
+      self&.area&.fetch(:run)
+    end
+
+    def track
+      self&.area&.fetch(:track)
+    end
+
+    def num!
+      self.num += 1
+    end
+
+    def name
+      "#{self.questor.fetch(:name)}_#{self.type}"
+    end
+
+    def command_name(cmd)
+      "#{self.name}_#{cmd}"
+    end
+
+    def set_target(target)
+      parts = target.to_s.strip.split(' ').map(&:strip)
+
+      self.targets = [
+        parts.join(' '),
+        parts.map{|p| p[0..-2] }.join(' '),
+        parts.map{|p| p[0..-3] }.join(' '),
+        'mob'
+      ]
+    end
+  end
 
   def initialize(bot, *args, **kwargs)
     super
-    # bot.scheduler.every(3.second) do
-    # end
+    @quest = nil
     @commands = []
 
     subscribe(State::STATE_BATTLE_EVENT) do
@@ -21,7 +53,7 @@ class Quest < Plugin
     bot.scheduler.every(1.second) do
       next if @paused || deps[State].battle?
 
-      if cmd = @commands.shift
+      if (cmd = @commands.shift)
         info "run cmd:#{cmd.name}"
         cmd.run
       end
@@ -31,6 +63,90 @@ class Quest < Plugin
   def status
     info("Quest:\n#{@quest.to_s.light_white}")
     info("Target:#{@target.to_s.light_red} Target2:#{@target2.to_s.red} Area:#{@area.to_s.light_yellow}")
+  end
+
+  QESTORS = {
+    mid_kill: {
+      name:    'mid_kill',
+      questor: 'zarad',
+      run:     '2eses',
+      type:    :kill
+    },
+    nt_kill:  {
+      name:    'nt_kill',
+      questor: 'warrior',
+      run:     '16esse',
+      type:    :kill
+    }
+  }
+
+  def begin_quest(name)
+    questor = QESTORS.fetch(name.to_sym)
+    @quest = Quest.new(questor[:type], nil, [], 0, questor)
+
+    recall_if_needed.then_cmd(:questor) do |_cmd|
+      await_action(quest.command_name(:questor), duration: 60.seconds) do
+        send("run #{quest.questor[:run]}")
+      end
+    end.then_cmd(:get_quest) do |_cmd|
+      await_line(quest.command_name(:get_quest), /get_quest_marker/, duration: 10.seconds) do
+        send("greet #{quest.questor[:questor]}")
+        send('help get_quest_marker')
+      end
+    end.then do |_success, lines, _md, *_rest|
+
+      STDERR.puts lines
+      STDERR.puts KILL_QUEST_EMPTY_RX
+      STDERR.puts match(lines, KILL_QUEST_EMPTY_RX).inspect
+      if match(lines, KILL_QUEST_EMPTY_RX)
+        warn('EMPTY')
+        next
+      end
+
+      raise 'unable to get quest' if match(lines, KILL_QUEST_RX).nil?
+
+      target_md = match(lines, KILL_TARGET_RX)
+      area_md = match(lines, KILL_AREA_RX)
+
+      raise 'unable detect quest target' unless target_md
+      raise 'unable detect quest area' unless area_md
+
+      @quest.set_targets(target_md[:target])
+      @quest.area = AREAS.get(area_md[:area])
+
+      self.__send__("start_#{@quest.type}")
+    end.rescue do |ex, *rest|
+      warn("begin_quest failed: #{ex.inspect} #{rest}")
+    end
+  end
+
+  def start_kill
+    recall = recall_if_needed
+
+    recall.rescue do |ex, *rest|
+      error "Unable to recall: #{ex.inspect} #{rest}"
+      raise ex
+    end
+
+    recall.then_cmd do |_cmd|
+      kill2(quest.area[:names].first, @quest.targets.first, @quest.targets.last)
+    end
+  end
+
+  def recall_if_needed
+    post_command(:detect_recall) do |_cmd|
+      await_line(quest.command_name(:detect_recall), /Рыночная Площадь/, duration: 10.seconds) do
+        send('look')
+      end.rescue do
+        await_line(quest.command_name(:detect_recall), /Рыночная Площадь/, duration: 10.seconds) do
+          send('recall')
+          send('s')
+          send('s')
+        end
+      end.then do
+        info 'GOOD'
+      end
+    end
   end
 
   def begin_kill(questor)
@@ -72,6 +188,10 @@ class Quest < Plugin
 
   KILL_QUEST_READY = 'kill_quest_ready'
 
+  KILL_QUEST_EMPTY_RX = [
+    /(.*)\ кланяется тебе и говорит: 'У меня нет ничего для тебя\.'/
+  ]
+
   KILL_QUEST_RX = [/^Мастер (?<questor>.*) говорит тебе очень тихо:$/].freeze
   KILL_TARGET_RX = [
     /Может быть, ты (.*) про (?<target>[^.,'-?:]+)\?/m,
@@ -83,7 +203,7 @@ class Quest < Plugin
   KILL_OBSERVE_RX = [
     /Тут есть только (?<next>\d+)?\ /,
     /Тут этого не видно(?<next>\d+)?/,
-    /тот самый (.*), о котором говорил (.*)\!/,
+    /тот самый (.*), о котором говорил (.*)!/,
     /ты нашёл (.*), (.*) искал по описанию (.*)/,
     /Очень похож на (.*), о (.*) говорил (,*)/
   ]
@@ -100,60 +220,61 @@ class Quest < Plugin
 
   # Очень похож на степного волка, о котором говорил мастер гильдии Воинов.
 
-  def process(line)
-    if (md = match(line, KILL_QUEST_RX))
-      begin_kill(md[:questor])
-    elsif (md = match(line, KILL_TARGET2_RX))
-      info(md)
-      @target2 = md[:target][0..-2]
-      status
-    end
+  def process(_line)
+    # if (md = match(line, KILL_QUEST_RX))
+    #   begin_kill(md[:questor])
+    # elsif (md = match(line, KILL_TARGET2_RX))
+    #   info(md)
+    #   @target2 = md[:target][0..-2]
+    #   status
+    # end
   rescue StandardError => e
     error(e.inspect)
   end
 
 
   AREAS = {
-    #'Zoo of Midgaard' => {
-    'zoo' => {
-      run:   '6sesws',
+    'zoo'  => {
       names: ['zoo', 'Zoo of Midgaard'],
-      #run: '',
+      run:   '6sesws',
       track: 's;e;e(Вход в детскую секцию);e;n;s;e;n(В вольере)[D];n;w;e;s;s;s(Конюшня)[D]'
-      #track: 'n;n;n'
     },
-    'w' => {
+    'wt'   => {
+      names: ['wt', "Wyvern's Tower"],
       run:   '6e4s2es2ede',
-      # run: 'sn',
       track: 'e;n;n;n;n;n;w;w;n;s;s;n;w;n;s;s;n;w;w'
-      #track: 'w'
     },
-    'b' => {
-    run: '11w3s2e11s',
-    track: 's;s;w;w;w;s;s;s;w'   
+    'bz'   => {
+      names: %w[bz Bazaar],
+      run:   '11w3s2e11s',
+      track: 's;s;w;w;w;s;s;s;w'
     },
-    'nt' => {
-      run: '16e',
+    'nt'   => {
+      names: ['nt', 'New Thalos'],
+      run:   '16e',
       track: 'e;e;e;e;e;n;n;n;n;w;w;w;w;n;n[D];d[D];e[D];n[DL];s[DL];s[DL];n[DL];e;n[DL];s[DL];s[DL];n[DL];e;n[DL];s[DL];s[DL];n[DL];'
     },
     'anon' => {
-      names: ['anon'],
-      #run: '7w2s2w2s4w25s',
-      run: '',
+      names: ['anon', 'ca', 'City of Anon'],
+      run:   '7w2s2w2s4w25s',
       track: 'w;w;s;s;e;e;e;e;e;n;n;w;n;w;e;s;e;e;e;n;n;d;u;s;s;e;e;e;e;e;n;n;d;u;s;s;w;w;w;w;w;w;w;s;s;s;s;w;w;w;s;s;e;'
     },
-    'dn' => {
-      names: ['dn'],
-      #run: '7w2s2w2s4w25s',
-      run: '',
+    'dn'   => {
+      names: ['dn', 'Dangerous Neighborhood'],
+      run:   '6ses2ese',
       track: 'e;e;e;e;e;e;e;s;w;w;w;s;e;s;w;w;n;w;n;w;n;e;e;s;s;s;e;s;e;e;e;n;n;n'
+    },
+    'sr'   => {
+      names: ['sr', 'Southern Road'],
+      run:   '7w2s2w2s4w3s',
+      track: 's;s;s;s;s;s;s;s;s;s;s;s;s;e;n;n;n;n;s;s;s;s;s;s;s;s;s;s;s;w;s;s;s;s;s;s;s;s;e;e;e;e;e;e'
     }
   }
 
   AREAS.instance_eval do
-    def get name
+    def get(name)
       self.fetch(name.to_s) do
-        n, _ = self.find do |k, area|
+        n, = self.find do |_k, area|
           area.fetch(:names, []).include?(name.to_s)
         end
         fetch(n || name.to_s)
@@ -184,55 +305,48 @@ class Quest < Plugin
     end
   end
 
-  Current = Struct.new('Current', :type, :area, :targets, :num) do
-    def path
-      self.area[:run]
-    end
 
-    def track
-      self.area[:track]
-    end
 
-    def num!
-      self.num += 1
-    end
-  end
-
-  def kill area, target=@target, target2=@target2
+  def kill(area, target = @target, target2 = @target2)
     @target = target
     @target2 = target2
     run(area)
   end
 
-  def kill2 area, target=@target, target2=@target2
+  def kill2(area, target = @target, target2 = @target2)
     @target = target
     @target2 = target2
-    run2(Current.new(:kill, AREAS.get(area), [target, target2], 0))
+    run2(Quest.new(:kill, AREAS.get(area), [target, target2], 0))
   end
 
   class Concurrent::Promises::ResolvableFuture
-    def force p
+
+    def force(p)
       if p.is_a?(Concurrent::Promises::AbstractEventFuture)
-        p.then{|a, *rest| puts "then:#{a}"; self.fulfill([a, *rest])}
-        p.rescue{|a, *rest| puts "rescue:#{a}", self.reject([a, *rest])}
+        p.then do |a, *rest|
+          puts "then:#{a}"
+          self.fulfill([a, *rest])
+        end
+        p.rescue{|a, *rest| puts "rescue:#{a}", self.reject([a, *rest]) }
       else
         self.resolve(p)
       end
     end
 
-    def attach future
-      future.then{|a, *rest| self.fulfill([a, *rest], false)}
-      future.rescue{|a, *rest| self.reject([a, *rest], false)}
+    def attach(future)
+      future.then{|a, *rest| self.fulfill([a, *rest], false) }
+      future.rescue{|a, *rest| self.reject([a, *rest], false) }
       self
     end
+
   end
 
   def run2(current)
     runner = Concurrent::Promises.resolvable_future
 
-    #сначала доходим до арии
+    # сначала доходим до арии
     katka = runner.then do |current|
-      post_command(:run) do |cmd|
+      post_command(:run) do |_cmd|
         await_action("run_#{current.path.inspect}", duration: 30.seconds) do
           send("run #{current.path}")
         end
@@ -241,12 +355,12 @@ class Quest < Plugin
 
     # теперь выслеживаем моба
     katka = katka.then do
-      post_command(:track) do |cmd|
+      post_command(:track) do |_cmd|
         track_mob(current)
       end.promise
     end.flat
 
-    katka = katka.then do |mob, *rest|
+    katka = katka.then do |mob, *_rest|
       info "ATACK:#{mob}.#{target}"
     end
 
@@ -257,7 +371,6 @@ class Quest < Plugin
     runner.fulfill(current)
   end
 
-
   def track_mob(current)
     Concurrent::Promises.resolvable_future.tap do |promise|
       @track = current.track.split(';').map(&:strip).select(&:presence)
@@ -265,73 +378,68 @@ class Quest < Plugin
     end
   end
 
-  def make_next_step current, promise
-    if @track.empty?
-      return promise.reject(StandardError.new("Track is empty!"))
-    end
+  def make_next_step(current, promise)
+    return promise.reject(StandardError.new('Track is empty!')) if @track.empty?
+
     make_step(current, Step.new(@track.shift), promise)
-  rescue => e
+  rescue StandardError => e
     error e.inspect
   end
 
   def make_step(current, step, promise)
     num = current.num!
-    action = post_command("move_#{num}") do |cmd|
+    action = post_command("move_#{num}") do |_cmd|
       await_action("step_#{step.dir}_#{num}") do
         send("pick #{step.dir}") if step.lock?
         send("unlock #{step.dir}") if step.lock?
         send("open #{step.dir}") if step.door?
+        send('hide')
+        send('sneak')
         send("#{step.dir}")
       end.tap do |a|
-        a.rescue do |ex,*rest|
+        a.rescue do |ex, *_rest|
           warn("make_step[#{step}] failed1: #{ex} #{args}")
         end
       end
     end
 
 
-    action = action.then_cmd(:control) do |cmd|
+    action = action.then_cmd(:control) do |_cmd|
       if step.name
-        do_control(step) 
+        do_control(step)
       else
         Concurrent::Promises.fulfilled_future(step)
       end
     end
 
-    action = action.then_cmd(:observe) do |cmd|
+    action = action.then_cmd(:observe) do |_cmd|
       @target = current.targets.first
       @target2 = current.targets.last
       do_observe_kill
     end
 
 
-    action = action.then_cmd(:decision) do |cmd, mob, *rest|
+    action = action.then_cmd(:decision) do |_cmd, mob, *rest|
       if mob
         promise.fulfill([mob, *rest])
       else
-        info "There is no target"
+        info 'There is no target'
         make_next_step(current, promise)
       end
     end
 
     promise.attach(action.promise)
   end
-  
-
-
-
-
-
 
   def run(area)
     @area = AREAS[area]
     await_action("run_#{@area[:run].inspect}", duration: 30.seconds) do
       send("run #{@area[:run]}")
-    end.then do |id, success, *rest|
+    end.then do |_id, _success, *_rest|
       start_track
-    end.flat.then do |mob, *rest|
+    end.flat.then do |mob, *_rest|
       info "ATACK:#{mob}.#{target}"
-    end.rescue do |e, *rest|
+    end.rescue do |e, *_rest|
       warn "Area failed: #{e.inspect}"
     end
   end
@@ -344,10 +452,9 @@ class Quest < Plugin
     end
   end
 
-  def next_step promise
-    if @track.empty?
-      return promise.reject(StandardError.new("Track is empty!"))
-    end
+  def next_step(promise)
+    return promise.reject(StandardError.new('Track is empty!')) if @track.empty?
+
     do_step(Step.new(@track.shift), promise)
   end
 
@@ -359,13 +466,13 @@ class Quest < Plugin
       send("unlock #{@current.dir}") if @current.lock?
       send("open #{@current.dir}") if @current.door?
       send("#{@current.dir}")
-    end.rescue do |ex,*rest|
+    end.rescue do |ex, *_rest|
       warn("do_step[#{step}] failed1: #{ex} #{args}")
     end
 
-    action.then do |id, success, *rest|
+    action.then do |_id, _success, *_rest|
       if @current.name
-        do_control(step) 
+        do_control(step)
       else
         Concurrent::Promises.fulfilled_future(step)
       end
@@ -383,7 +490,7 @@ class Quest < Plugin
     end
   end
 
-  def do_control step
+  def do_control(step)
     await_line("control_#{step.dir}_#{@num}", /#{step.name}/, duration: 5.seconds) do
       send('look')
     end.then do
@@ -394,30 +501,30 @@ class Quest < Plugin
   end
 
   def do_observe_kill
-    iterate_mobs(1, KILL_OBSERVE_RX).then do |mob, *rest|
+    iterate_mobs(1, KILL_OBSERVE_RX).then do |mob, *_rest|
       info("Kill Target observed: #{mob}.#{target}") if mob
       mob
     end
   end
 
-  def iterate_mobs mob = 1, rxs
+  def iterate_mobs(mob = 1, rxs)
     Concurrent::Promises.resolvable_future.tap do |promise|
       if mob >= 6
         promise.fulfill(false)
-        return promise 
+        return promise
       end
 
       action = await_line("look_mob_#{mob}", rxs) do
-        send("look #{mob}.#{target}" )
+        send("look #{mob}.#{target}")
       end
-      
-      action.rescue do |ex, *rest|
+
+      action.rescue do |_ex, *_rest|
         iterate_mobs(mob + 1, rxs)
       end.flat.then do |a, *rest|
         promise.fulfill([a, *rest])
       end
-      
-      action.then do |success, _lines, md, args|
+
+      action.then do |_success, _lines, md, _args|
         if md && md.named_captures.has_key?('next')
           promise.fulfill(false)
         else
@@ -428,7 +535,9 @@ class Quest < Plugin
   end
 
   class Command
+
     attr_accessor :promise, :name, :block
+
     def initialize(name, commands:, promise: Concurrent::Promises.resolvable_future, &block)
       @name = name
       @promise = promise
@@ -438,50 +547,46 @@ class Quest < Plugin
 
     def run
       @block.call(self).tap do |result|
-        if result.is_a?(Concurrent::Promises::AbstractEventFuture)
-          promise.attach(result)
-        end
+        promise.attach(result) if result.is_a?(Concurrent::Promises::AbstractEventFuture)
       end
     end
 
-    def then &block
-      promise.then(&block)
+    def then(&)
+      promise.then(&)
     end
 
-    def rescue &block
-      promise.rescue(&block)
+    def rescue(&)
+      promise.rescue(&)
     end
 
     def then_cmd(name, &block)
       Command.new(name, commands: @commands).tap do |cmd|
         self.then do |a, *rest|
-          cmd.block = Proc.new do |cmd|
+          cmd.block = proc do |cmd|
             block.call(cmd, a, *rest)
           end
           @commands << cmd
         end
       end
-    end 
+    end
 
-    def rescue_cmd(*args, &block)
+    def rescue_cmd(*_args, &block)
       Command.new(name, commands: @commands).tap do |cmd|
         self.rescue do |a, *rest|
-          cmd.block = Proc.new do |cmd|
+          cmd.block = proc do |cmd|
             block.call(cmd, a, *rest)
           end
           @commands << cmd
         end
       end
-    end 
+    end
+
   end
 
-  def post_command name
-    Command.new(name, commands: @commands) do |cmd|
-      yield(cmd)
-    end.tap{ |cmd| @commands << cmd }
+  def post_command(name, &block)
+    Command.new(name, commands: @commands, &block).tap{|cmd| @commands << cmd }
   end
 
-  
   def target
     @target.presence || @target2.presence || 'mob'
   end
@@ -557,9 +662,9 @@ Sorcery'. Было бы весьма отрадно узнать о его см�
 Road'. По слухам, за её голову (или другое доказательство смерти) обещают
 награду.
 },
-%{
+    %{
 # Ты здороваешься с мастером гильдии Воинов.
-Мастер гильдии Воинов говорит тебе очень тихо: 
+Мастер гильдии Воинов говорит тебе очень тихо:
 - Есть одно дельце для тебя. Я говорю о вожде кентавров. Не хочу, чтобы ты
 перепутал,- подробно описывает внешность,-  Попробуй поспрашивать в 'Wyvern's
 Tower'. По слухам, за его голову (или другое доказательство смерти) обещают
