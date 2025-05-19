@@ -48,11 +48,12 @@ class TrainBattle < Plugin
     @battle = true if battle? && !@battle
     return if @battle || @refresh
 
-    send("c 'inv'")
+    #send("c 'inv'")
+    #send("hide")
+    #send("hide")
     send("hide")
-    send("hide")
-    send("hide")
-    send("back '#{@targets.shuffle.first}'")
+    send("kill '#{@targets.shuffle.first}'")
+    send("rescue eriden")
   end
 
   def battle?

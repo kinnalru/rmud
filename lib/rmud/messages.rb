@@ -44,6 +44,9 @@ module RMud
       /^.* (?<who>.*) (говорят|говорит|отвечает|спрашивает).* '(?<text>.*)'$/
     ]
 
+    CAPTURE_RX = /(?<who>.*) достигает следующей ступени!/
+    
+
     SAY_RX = /^.*Ты произносишь '(.*)'$/
     SKILL_RX = /^Ты улучшаешь своё умение (.*).*$/
     SKILL2_RX = /^Осознав свои ошибки, ты становишься более искусным в (.*).*$/
@@ -55,6 +58,8 @@ module RMud
     def process(line)
       if (md = TELLS_RX.map{|rx| rx.match(line) }.compact.first)
         post(line.sub(md[:who], md[:who].light_white).sub(md[:text], md[:text].light_green))
+      elsif md = CAPTURE_RX.match(line)
+        post(line.sub(md[1], md[1].light_green))
       elsif md = SAY_RX.match(line)
         post(line.sub(md[1], md[1].light_green))
       elsif md = SKILL_RX.match(line) || SKILL2_RX.match(line)
