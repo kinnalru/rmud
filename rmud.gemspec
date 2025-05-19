@@ -17,8 +17,10 @@ Gem::Specification.new do |spec|
   spec.bindir        = 'bin'
   spec.require_paths = ['lib']
 
+  
+  spec.add_runtime_dependency 'logger'
+  spec.add_runtime_dependency 'zeitwerk'
   spec.add_runtime_dependency 'activesupport', '~> 6.0'
-  #spec.add_runtime_dependency 'daemons'
   spec.add_runtime_dependency 'colorize'
   spec.add_runtime_dependency 'concurrent-ruby'
 

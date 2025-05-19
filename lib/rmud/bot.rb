@@ -1,4 +1,4 @@
-require 'colorize'
+
 module RMud
 
   class Log
@@ -64,7 +64,6 @@ module RMud
       @scheduler.after(2.second) do
         plugin('Messages')
       end
-      
     end
 
     def notify(event, payload = nil)
@@ -96,9 +95,9 @@ module RMud
       @conn.wait
     end
 
-    def plugin_command!(cmd, *args)
+    def plugin_command!(cmd, *)
       if (p = @plugins[find_plugin(cmd).to_s])
-        p.__send__(*args)
+        p.__send__(*)
         true
       end
     end
@@ -130,7 +129,9 @@ module RMud
     def find_plugin(name)
       prev = name
       name = name.classify
-      [prev, "RMud::#{prev}", name, "RMud::#{name}", "RMud::Bot::#{name}"].find{|n| n.safe_constantize }.safe_constantize
+      [prev, "RMud::#{prev}", name, "RMud::#{name}", "RMud::Bot::#{name}", "RMud::Plugin::#{name}", "RMud::Plugin::#{prev}"].find do |n|
+        n.safe_constantize
+      end.safe_constantize
     end
 
     def plugin name, *params
@@ -145,7 +146,7 @@ module RMud
         @plugins[klass.to_s] = p
         @conn.on_line do |line|
           p.process(line)
-        rescue => e
+        rescue StandardError => e
           api.error "[#{p.class}]:#{e.inspect}"
         end
         api.info("Plugin [#{klass}] started")

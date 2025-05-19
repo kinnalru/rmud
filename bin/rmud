@@ -47,6 +47,9 @@ Dir.chdir(@opts[:dir])
 
 conn, bot = nil
 
+RMud::Bot
+
+
 $log = RMud::Log.new(@opts[:id])
 
 if @opts[:client] == 'tintin'
@@ -56,10 +59,10 @@ if @opts[:client] == 'tintin'
   puts "\nPreparing script for TinTin++ integration..."
   script = "#{@opts[:dir]}/#{@opts[:id]}.tin"
   File.write(script, RMud::Api::TinTin.script(infile: conn.infile, outfile: conn.outfile))
-  puts "  You can run TinTin++ using script"
-  puts "".ljust(80, '*')
-  puts '*' + "tt++ -r #{script.to_s}".center(78, ' ') + '*'
-  puts "".ljust(80, '*')
+  puts '  You can run TinTin++ using script'
+  puts ''.ljust(80, '*')
+  puts '*' + "tt++ -r #{script}".center(78, ' ') + '*'
+  puts ''.ljust(80, '*')
 end
 
 if @opts[:client] == 'mudlet'
@@ -112,11 +115,11 @@ end
 
 
 
-puts "DAEMON BOT.."
+puts 'DAEMON BOT..'
 r = Daemons.run_proc(@opts[:id], dir: @opts[:dir], dir_mode: :normal, log_output: true, ARGV: @args) do
   Dir.chdir(@opts[:dir])
   $a = 1
-  puts "DAEMON BOT OK"
+  puts 'DAEMON BOT OK'
 
   STDOUT.sync = true rescue nil
   STDERR.sync = true rescue nil
