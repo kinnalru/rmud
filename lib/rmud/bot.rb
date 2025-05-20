@@ -52,7 +52,7 @@ module RMud
       # end
 
       @plugins = {}
-      @scheduler = Scheduler.new
+      @scheduler = Scheduler.new(tick: 0.5)
       @api = api_class.new(bot: self)
 
       @conn.on_line do |line|
@@ -63,6 +63,7 @@ module RMud
 
       @scheduler.after(2.second) do
         plugin('Messages')
+        plugin('Items')
       end
     end
 

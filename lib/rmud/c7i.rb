@@ -23,90 +23,107 @@ module RMud
         success: [/Ты не болеешь/],
         tags:    [:self]
       },
+      cure_poison:      {
+        name:    'cure poison',
+        success: [/Ты не отравлен/],
+        tags:    [:self]
+      },
+      dispel_magic:     {
+        name:           'dispel magic',
+        success:        [/Ты не болеешь/],
+        tags:           [:self],
+        default_target: 'self'
+      },
 
       armor:            {
         name:    'armor',
         success: ['Hа тебе уже есть магическая защита.', 'Ты чувствуешь, как что-то защищает тебя.'],
-        tags:    [:self]
+        tags:    [:self, :obcast]
       },
       shield:           {
         name:    'shield',
         success: ['Тебя уже защищает магический щит.', 'Ты окружаешься волшебным силовым щитом.'],
-        tags:    [:self]
+        tags:    [:self, :obcast]
       },
       bless:            {
         name:    'bless',
         success: ['У тебя уже есть божественное благословение.', 'Ты получаешь благословение от своего Бога.'],
-        tags:    [:self]
+        tags:    [:self, :obcast]
       },
       stone_skin:       {
         name:    'stone skin',
         success: [/Твоя кожа превращается в камень/, /Твоя кожа уже тверда, как камень/],
-        tags:    [:self]
+        tags:    [:self, :obcast]
+      },
+      protection_shield:       {
+        name:    'protection shield',
+        success: [/Волшебная защитная аура окружает тебя/, /Hо тебя уже окружает щит/],
+        tags:    [:self, :obcast]
       },
       protection_evil:  {
         name:    'protection evil',
         success: [/Ты чувствуешь себя очищенным и благословленным/, /У тебя уже есть защита/],
-        tags:    [:self]
+        tags:    [:self, :obcast]
       },
       protection_good:  {
         name:    'protection good',
         success: [/Боги Зла не хотят защищать тебя от сил Добра/],
-        tags:    [:self]
+        tags:    [:self, :obcast]
       },
 
 
       giant_strength:   {
         name:    'giant strength',
         success: [/Твои мускулы дрожат от избытка силы!/, /Ты не можешь стать ещё сильнее!/],
-        tags:    [:self]
+        tags:    [:self, :obcast]
       },
       fly:              {
         name:    'fly',
         success: ['Ты взлетаешь.', 'Ты уже можешь летать.'],
-        tags:    [:self]
+        tags:    [:self, :obcast]
       },
       invisibility:     {
         name:    'invisibility',
         success: ['Ты растворяешься в пространстве.', 'Ты уже невидим.'],
-        tags:    [:self]
+        tags:    [:self, :obcast]
       },
       infravision:      {
         name:    'infravision',
         success: ['В твоих глазах загорелись красные огоньки.', 'Ты уже видишь в темноте.'],
-        tags:    [:self]
+        tags:    [:self, :obcast]
       },
 
 
       detect_magic:     {
         name:    'detect magic',
         success: ['Ты чувствуешь покалывание в глазах.', 'Ты не можешь чувствовать магию ещё лучше.'],
-        tags:    [:self]
+        tags:    [:self, :obcast]
       },
       detect_invis:     {
         name:    'detect invis',
         success: ['Ты начинаешь видеть невидимое.', 'Ты уже видишь невидимое.'],
-        tags:    [:self]
+        tags:    [:self, :obcast]
       },
       detect_poison:    {
-        name:    'detect poison',
-        success: ['Вроде бы яда тут нет.'],
-        tags:    [:self]
+        name:           'detect poison',
+        success:        ['Вроде бы яда тут нет.', /Это не годится для еды или питья/],
+        tags:           [:weapon],
+        default_target: 'weapon'
       },
       detect_hidden:    {
         name:    'detect hidden',
         success: [/Ты начинаешь видеть скрытое от невооружённого глаза/, /Ты уже видишь скрытые формы жизни/],
-        tags:    [:self]
+        tags:    [:self, :obcast]
       },
       detect_alignment: {
         name:    'detect alignment',
         success: [/Ты теперь можешь чувствовать добро и зло/, /Ты уже можешь различать добро и зло/],
-        tags:    [:self]
+        tags:    [:self, :obcast]
       },
       farsight:         {
         name:    'farsight',
         success: [/Твой взгляд устремляется вдаль/, /Ты хочешь видеть ЕЩЁ дальше/],
-        tags:    [:self]
+        tags:    [:self, :obcast]
       },
 
 
@@ -137,6 +154,18 @@ module RMud
       create_food:      {
         name:    'create food',
         success: [/^Перед тобой вдруг появляется (.*)/]
+      },
+      fireproof:        {
+        name:           'fireproof',
+        success:        [/(.*) окружается защитной аурой/, /(.*) уже защищен от магии/],
+        tags:           [:weapon],
+        default_target: 'weapon'
+      },
+      identify:         {
+        name:           'identify',
+        success:        [/Объект '.*'\n|\sТип:.*\n|\sВес:.*/m],
+        tags:           [:weapon],
+        default_target: 'weapon'
       }
     }
 

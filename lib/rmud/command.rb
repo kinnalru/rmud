@@ -1,6 +1,25 @@
 require 'concurrent-ruby'
 require 'concurrent/promise'
 
+class Concurrent::Promises::ResolvableFuture
+
+  def force(value)
+    if value.is_a?(Concurrent::Promises::AbstractEventFuture)
+      value.then {|a, *rest| self.fulfill([a, *rest]) }
+      value.rescue{|a, *rest| self.reject([a, *rest]) }
+    else
+      self.resolve(value)
+    end
+  end
+
+  def attach(future)
+    future.then{|a, *rest| self.fulfill([a, *rest], false) }
+    future.rescue{|a, *rest| self.reject([a, *rest], false) }
+    self
+  end
+
+end
+
 module RMud
   class Command
 
@@ -16,6 +35,9 @@ module RMud
     def run
       @block.call(self).tap do |result|
         promise.attach(result) if result.is_a?(Concurrent::Promises::AbstractEventFuture)
+      rescue StandardError => e
+        warn "command exc: #{e}"
+        raise
       end
     end
 

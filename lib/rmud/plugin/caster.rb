@@ -67,39 +67,44 @@ module RMud
           next if @paused
 
           if (cmd = commands_queue.shift)
-            info "run cmd:#{cmd.name}"
             cmd.run
           end
         end
       end
 
-      def find_in_queue(action)
-        @queue.find do |a|
-          a.id == action.id
+      def mk_promise(*args)
+        Concurrent::Promises.resolvable_future.tap do |promise|
+          yield(promise)
+        rescue StandardError => e
+          promise.reject(e, *args)
         end
       end
 
-      def cast(spell, target = nil)
-        s = Action.new(:spell, C7i::SPELLS.fetch(spell.to_sym), target)
+      def obcast(type = :obcast)
+        mk_promise do |promise|
+          promise.then do
+            info("#{'obcast'.light_white}[#{type}] #{'completed'.light_green}")
+          end.rescue do |ex, *rest|
+            info("#{'obcast'.light_white}[#{type}] #{'failed'.light_red}: #{ex} #{rest}")
+          end
 
-        if (a = find_in_queue(s))
-          a.promise
-        else
-          @queue << s
-          execute_next_action
-          s.promise
-        end
-      end
+          spells = filter_spells(type)
 
-      def skill(skill, target = nil)
-        s = Action.new(:skill, C7i::SKILLS.fetch(skill.to_sym), target)
+          cast_next = proc do
+            if (spell = spells.shift)
+              post_command("obcast[#{type}]_#{spell}") do |_cmd|
+                cast(spell)
+              end.rescue do |ex, *rest|
+                error "obcast[#{type}] #{spell.to_s.light_cyan} failed:#{ex} #{rest}"
+              end.then do
+                cast_next.call
+              end
+            else
+              promise.fulfill(1)
+            end
+          end
 
-        if (a = find_in_queue(s))
-          a.promise
-        else
-          @queue << s
-          execute_next_action
-          s.promise
+          cast_next.call
         end
       end
 
@@ -112,7 +117,7 @@ module RMud
           info("Casting[#{action.name.to_s.light_cyan}] on #{action.target.inspect}")
           action.start!
           send(action.command)
-        end.then do |_success, lines, md|
+        end.then do |_success, lines, _md|
           finalize_action(action, lines)
         end.rescue do |ex, *rest|
           finalize_action(action, ex, *rest)
@@ -141,6 +146,41 @@ module RMud
 
       def process(line); end
 
+      def find_in_queue(action)
+        @queue.find do |a|
+          a.id == action.id
+        end
+      end
+
+      def filter_spells(group)
+        RMud::C7i::SPELLS.select do |_name, sp|
+          sp.fetch(:tags, []).include?(group.to_sym)
+        end.map{|name, _sp| name }.map(&:to_sym)
+      end
+
+      def cast(spell, target = nil)
+        s = Action.new(:spell, C7i::SPELLS.fetch(spell.to_sym), target)
+
+        if (a = find_in_queue(s))
+          a.promise
+        else
+          @queue << s
+          execute_next_action
+          s.promise
+        end
+      end
+
+      def skill(skill, target = nil)
+        s = Action.new(:skill, C7i::SKILLS.fetch(skill.to_sym), target)
+
+        if (a = find_in_queue(s))
+          a.promise
+        else
+          @queue << s
+          execute_next_action
+          s.promise
+        end
+      end
 
     end
   end

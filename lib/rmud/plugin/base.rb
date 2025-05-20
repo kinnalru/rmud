@@ -115,9 +115,15 @@ module RMud
         end
       end
 
-      def self.match(line, rxs)
+      def self.match(line, rxs, *_args, single: true, **_kwargs)
         line = [line].flatten.join(' ')
-        line = line.split("\n").join(' ').gsub(/\s+/, ' ').strip
+        line = if single
+          line.split("\n").join(' ').gsub(/\s+/, ' ').strip
+        else
+          line.gsub(/[[:blank:]]+/, ' ').strip
+        end
+
+        puts line
 
         rxs = [rxs].flatten
         rxs.each do |rx|
@@ -132,8 +138,8 @@ module RMud
         nil
       end
 
-      def match(line, rxs)
-        self.class.match(line, rxs)
+      def match(line, rxs, *, **)
+        self.class.match(line, rxs, *, **)
       end
 
       def await_action name, *args, duration: 60.seconds
@@ -142,7 +148,9 @@ module RMud
           s = subscribe(::RMud::Bot::LINE_EVENT) do |event|
             if event.payload && event.payload["#{id}:completed"]
               event.subscription.unsubscribe
-              promise.fulfill([id, true, *args])
+              bot.scheduler.immidiate do
+                promise.fulfill([id, true, *args], false)
+              end
             end
           end
 

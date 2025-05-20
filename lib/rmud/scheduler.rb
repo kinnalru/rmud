@@ -13,12 +13,14 @@ module RMud
 
       def split value
         left = SortedArray.new
-        while v = @array.first
+        while (v = @array.first)
+
           if v < value
             left.add @array.shift
           else
             break
           end
+          
         end
         [left, self]
       end
@@ -47,6 +49,14 @@ module RMud
 
       def each &block
         @array.each(&block)
+      end
+
+      def shift
+        @array.shift
+      end
+
+      def push *args
+        @array.push(*args)
       end
 
     end
@@ -84,6 +94,7 @@ module RMud
     def initialize tick: 1
       @tick = tick
       @timers = SortedArray.new
+      @past = SortedArray.new
 
       @thread = Thread.new(self) do |s|
         loop do
@@ -113,17 +124,35 @@ module RMud
 
     alias_method :cancel, :remove
 
+    def immidiate(&block)
+      @past&.push(Event.new(self, at: 1.year.ago, &block))
+    end
+
     def run
-      now = Time.now
       past, @timers = @timers.split(Time.now)
-      past.each do |e|
-        e.call
-      ensure
-        if e.repeat
-          e.at = e.repeat.since
-          @timers.add e
+      past.each do |p|
+        @past.add(p)
+      end
+
+      while (e = @past.shift) do
+        begin
+          e.call
+        ensure
+          if e.repeat
+            e.at = e.repeat.since
+            @timers.add e
+          end
         end
       end
+
+      # @past.each do |e|
+      #   e.call
+      # ensure
+      #   if e.repeat
+      #     e.at = e.repeat.since
+      #     @timers.add e
+      #   end
+      # end
     end
 
   end

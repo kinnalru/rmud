@@ -314,27 +314,7 @@ module RMud
         run2(Quest.new(:kill, AREAS.get(area), [target, target2], 0))
       end
 
-      class Concurrent::Promises::ResolvableFuture
 
-        def force(p)
-          if p.is_a?(Concurrent::Promises::AbstractEventFuture)
-            p.then do |a, *rest|
-              puts "then:#{a}"
-              self.fulfill([a, *rest])
-            end
-            p.rescue{|a, *rest| puts "rescue:#{a}", self.reject([a, *rest]) }
-          else
-            self.resolve(p)
-          end
-        end
-
-        def attach(future)
-          future.then{|a, *rest| self.fulfill([a, *rest], false) }
-          future.rescue{|a, *rest| self.reject([a, *rest], false) }
-          self
-        end
-
-      end
 
       def run2(current)
         runner = Concurrent::Promises.resolvable_future

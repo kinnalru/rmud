@@ -20,9 +20,12 @@ module RMud
         info(@spells)
       end
 
-      def all_self
+      def all(*tags)
+        tags = [:self, :weapon] if tags.empty?
+        tags = tags.map(&:to_sym)
+
         @spells = SPELLS.select do |_name, sp|
-          sp.fetch(:tags, []).include?(:self)
+          (sp.fetch(:tags, []) & tags).any?
         end.map{|name, _sp| name }.map(&:to_sym)
 
         start
@@ -40,7 +43,6 @@ module RMud
         completed_spells = []
         @spells.select! do |spell|
           full = SPELLS.fetch(spell)
-          # info(deps[State].spells)
           if deps[State].spells.fetch(full[:name].to_s)[:level].to_i == 100
             completed_spells << spell
             false
@@ -58,7 +60,7 @@ module RMud
 
         @current_spell = @spells.sample
         @current = SPELLS.fetch(@current_spell)
-        @f = f = deps[Caster].cast(@current_spell)
+        @f = f = deps[Caster].cast(@current_spell, @current[:default_target])
         f.then do |r, *_rest|
           @f = nil if @f == f
           completed(r)
@@ -67,7 +69,7 @@ module RMud
         end
       end
 
-      def completed(reason)
+      def completed(_reason)
         @current = nil
         castnext
       end
@@ -84,3 +86,13 @@ module RMud
   end
 end
 
+TEST=%{
+Объект 'kris white pawn крис белой пешки weapon оружие'
+Тип: weapon, материал: камень, доп. флаги: antievil.
+Вес: 1.0, стоит: 750, уровень: 10, использование: take, wield.
+Класс оружия: кинжал (dagger).
+Среднее повреждение от этого оружия: 7.3.
+В твоих руках: надень и узнаешь.
+Тип удара: колющий удар (pierce), что соответствует 'уязвимости к pierce' и 'AC от укола'.
+Добыто тобой 1 год назад.
+}
